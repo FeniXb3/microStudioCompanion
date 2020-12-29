@@ -13,6 +13,17 @@ namespace microStudio_Project_Backuper
     {
         static void Main(string[] args)
         {
+            var mode = "pull";
+            var projectSlug = "";
+            if (args.Length > 0)
+            {
+                mode = args[0];
+                if (args.Length > 1)
+                {
+                    projectSlug = args[1];
+                }
+            }
+
             var host = "https://microstudio.dev";
             var loginInfoFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "loginInfo.JSON");
             var configFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "config.JSON");
@@ -26,54 +37,67 @@ namespace microStudio_Project_Backuper
                     string token = GetToken(loginInfoFilePath, config, socket);
 
                     Console.WriteLine($"Recieved: {token}");
-                    var projects = GetProjects(socket);
-
-                    Console.Write("Project slug to backup: ");
-                    var projectSlug = Console.ReadLine();
-                    var selectedProject = projects[projectSlug];
-
-                    var remoteDirectories = new[] { "ms", "sprites", "maps", "doc" };
-                    var localDirectoryMapping = new Dictionary<string, string>
+                    if (mode == "pull")
                     {
-                        { "ms", "code" },
-                        { "sprites", "sprites" },
-                        { "maps", "maps" },
-                        { "doc", "docs" }
-                    };
-
-                    foreach (var dir in remoteDirectories)
-                    {
-                        var listProjectFilesRequest = new ListProjectFilesRequest
-                        {
-                            folder = dir,
-                            project = selectedProject.id
-                        };
-
-                       var nick = selectedProject.owner.nick;
-                        var slug = selectedProject.slug;
-                        var code = selectedProject.code;
-                        var name = selectedProject.title;
-                        var localDirectoryPath = Path.Combine(config.localDirectory, name, localDirectoryMapping[dir]);
-                        if (Directory.Exists(localDirectoryPath))
-                        {
-                            Directory.Delete(localDirectoryPath, true);
-                        }
-
-                        Directory.CreateDirectory(localDirectoryPath);
-
-                        var listProjectFilesResponse = SendAndReceive<ListProjectFilesRequest, ListProjectFilesResponse>(socket, listProjectFilesRequest);
-                        foreach (var file in listProjectFilesResponse.files)
-                        {
-
-
-                            var onlineFilePath = $"{host}/{nick}/{slug}/{code}/{dir}/{file.file}";
-                            var localFilePath = Path.Combine(localDirectoryPath, file.file);
-                            Console.WriteLine($"Downloading file: {file.file}");
-                            webClient.DownloadFile(onlineFilePath, localFilePath);
-                        }
+                        projectSlug = PullFiles(projectSlug, host, config, socket, webClient);
                     }
                 }
             }
+        }
+
+        private static string PullFiles(string projectSlug, string host, Config config, ClientWebSocket socket, WebClient webClient)
+        {
+            var projects = GetProjects(socket);
+
+            if (string.IsNullOrWhiteSpace(projectSlug))
+            {
+                Console.Write("Project slug to backup: ");
+                projectSlug = Console.ReadLine();
+            }
+            var selectedProject = projects[projectSlug];
+
+            var remoteDirectories = new[] { "ms", "sprites", "maps", "doc" };
+            var localDirectoryMapping = new Dictionary<string, string>
+                        {
+                            { "ms", "code" },
+                            { "sprites", "sprites" },
+                            { "maps", "maps" },
+                            { "doc", "docs" }
+                        };
+
+            foreach (var dir in remoteDirectories)
+            {
+                var listProjectFilesRequest = new ListProjectFilesRequest
+                {
+                    folder = dir,
+                    project = selectedProject.id
+                };
+
+                var nick = selectedProject.owner.nick;
+                var slug = selectedProject.slug;
+                var code = selectedProject.code;
+                var name = selectedProject.title;
+                var localDirectoryPath = Path.Combine(config.localDirectory, name, localDirectoryMapping[dir]);
+                if (Directory.Exists(localDirectoryPath))
+                {
+                    Directory.Delete(localDirectoryPath, true);
+                }
+
+                Directory.CreateDirectory(localDirectoryPath);
+
+                var listProjectFilesResponse = SendAndReceive<ListProjectFilesRequest, ListProjectFilesResponse>(socket, listProjectFilesRequest);
+                foreach (var file in listProjectFilesResponse.files)
+                {
+
+
+                    var onlineFilePath = $"{host}/{nick}/{slug}/{code}/{dir}/{file.file}";
+                    var localFilePath = Path.Combine(localDirectoryPath, file.file);
+                    Console.WriteLine($"Downloading file: {file.file}");
+                    webClient.DownloadFile(onlineFilePath, localFilePath);
+                }
+            }
+
+            return projectSlug;
         }
 
         private static Dictionary<string, List> GetProjects(ClientWebSocket socket)
