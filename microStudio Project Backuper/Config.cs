@@ -7,6 +7,6 @@ namespace microStudio_Project_Backuper
     public class Config
     {
         public string nick { get; set; }
-        public string password { get; set; }
+        public string localDirectory { get; set; }
     }
 }
