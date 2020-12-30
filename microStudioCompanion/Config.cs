@@ -16,7 +16,7 @@ namespace microStudioCompanion
         internal void Save()
         {
             System.IO.File.WriteAllText(configFilePath, JsonSerializer.Serialize(this));
-            Console.WriteLine($"Login and projects root dir are saved here: {configFilePath}");
+            Console.WriteLine($" [i] Login and projects root dir are saved here: {configFilePath}");
         }
 
         internal static Config Get()
@@ -39,7 +39,7 @@ namespace microStudioCompanion
 
         public void AskForNick()
         {
-            Console.Write("Your microStudio nick: ");
+            Console.Write(" (?) Your microStudio nick: ");
             this.nick = Console.ReadLine();
         }
 
@@ -47,8 +47,7 @@ namespace microStudioCompanion
         {
             do
             {
-                
-                Console.Write($"Local projects parent directory (it must exist) (leave empty to leave default - {defaultProjectsDirectory}): ");
+                Console.Write($" (?) Local projects parent directory (it must exist) (leave empty to leave default - {defaultProjectsDirectory}): ");
                 this.localDirectory = Console.ReadLine();
                 if (string.IsNullOrWhiteSpace(localDirectory))
                 {

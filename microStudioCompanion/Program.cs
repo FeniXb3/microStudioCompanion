@@ -13,6 +13,13 @@ namespace microStudioCompanion
     {
         static void Main(string[] args)
         {
+            Console.WriteLine(" ----------------------------------------------------------------------");
+            Console.WriteLine("| Welcome to microStudio Companion! Let's backup your game! :)         |");
+            Console.WriteLine("| If you want to contact me, write me an email: konrad@makegames.today |");
+            Console.WriteLine("| You can donate me at https://fenix.itch.io/microstudio-companion     |");
+            Console.WriteLine(" ----------------------------------------------------------------------");
+            Console.WriteLine();
+
             var mode = "pull";
             var projectSlug = "";
             if (args.Length > 0)
@@ -35,12 +42,12 @@ namespace microStudioCompanion
                     socket.ConnectAsync(new Uri("wss://microstudio.dev"), CancellationToken.None).Wait();
                     string token = GetToken(tokenInfoFilePath, config, socket);
 
-                    Console.WriteLine("Token is valid.");
+                    //Console.WriteLine("Token is valid.");
                     if (mode == "pull")
                     {
                         if (!Directory.Exists(config.localDirectory))
                         {
-                            Console.WriteLine($"!!! Parent directory for your projects ({config.localDirectory}) does not exist.");
+                            Console.WriteLine($" <!> Parent directory for your projects ({config.localDirectory}) does not exist.");
                             config.AskForDirectory();
                             config.Save();
                         }
@@ -49,14 +56,17 @@ namespace microStudioCompanion
                 }
             }
             Console.WriteLine();
-            Console.WriteLine("----------------------------------------------------------------------");
-            Console.WriteLine("| Done! Have a great day and enjoy making games!");
-            Console.WriteLine("| If you want to contact me, write me an email: konrad@makegames.today");
-            Console.WriteLine("| You can donate me at https://fenix.itch.io/microstudio-companion");
-            Console.WriteLine("----------------------------------------------------------------------");
+            Console.WriteLine(" ----------------------------------------------------------------------");
+            Console.WriteLine("| Done! Have a great day and Make Games Today!                         |");
+            Console.WriteLine("| If you want to contact me, write me an email: konrad@makegames.today |");
+            Console.WriteLine("| You can donate me at https://fenix.itch.io/microstudio-companion     |");
+            Console.WriteLine(" ----------------------------------------------------------------------");
             Console.WriteLine();
-            Console.WriteLine("Press enter to close the app.");
-            Console.ReadLine();
+            if (args.Length == 0)
+            {
+                Console.WriteLine("Press enter to close the app.");
+                Console.ReadLine();
+            }
         }
 
         private static void PullFiles(string projectSlug, string host, Config config, ClientWebSocket socket, WebClient webClient)
@@ -116,16 +126,17 @@ namespace microStudioCompanion
                     }
                 }
 
+                int index = 0;
+                int amount = listProjectFilesResponse.files.Length;
                 foreach (var file in listProjectFilesResponse.files)
                 {
-
-
                     var onlineFilePath = $"{host}/{nick}/{slug}/{code}/{dir}/{file.file}";
                     var localFilePath = Path.Combine(localDirectoryPath, file.file);
-                    Console.WriteLine($"Downloading file: {file.file}");
+                    Console.WriteLine($" [i] Downloading ({++index}/{amount}) file from \"{dir}\" directory: {file.file}");
                     webClient.DownloadFile(onlineFilePath, localFilePath);
                 }
             }
+            Console.WriteLine($" [i] Project downloaded to: {Path.Combine(config.localDirectory, selectedProject.title)}");
         }
 
         private static Project SelectProject(ref string projectSlug, Dictionary<string, Project> projects)
@@ -136,7 +147,7 @@ namespace microStudioCompanion
             {
                 if (string.IsNullOrWhiteSpace(projectSlug))
                 {
-                    Console.Write("Project slug to backup (leave empty to see list of all your projects): ");
+                    Console.Write(" (?) Project slug to backup (leave empty to see available projects): ");
                     projectSlug = Console.ReadLine();
                 }
 
@@ -147,11 +158,11 @@ namespace microStudioCompanion
                 }
                 else
                 {
-                    Console.WriteLine($"== Project with this slug \"{projectSlug}\"does not exist. Pick another one from the list. (Press any key to continue)");
+                    Console.WriteLine($" <!> Pick project slug from the list: (Press any key to continue)");
                     Console.ReadKey(true);
                     foreach (var proj in projects.Values)
                     {
-                        Console.WriteLine($"Slug: {proj.slug} | Title: {proj.title}");
+                        Console.WriteLine($"- Slug: {proj.slug}  Title: {proj.title}");
                     }
                     projectSlug = null;
                 }
@@ -194,7 +205,7 @@ namespace microStudioCompanion
             LoginResponse response = null;
             while (token == null)
             {
-                Console.Write("Your microStudio password: ");
+                Console.Write(" (?) Your microStudio password: ");
                 var password = Console.ReadLine();
 
                 var loginRequest = new LoginRequest
@@ -207,7 +218,7 @@ namespace microStudioCompanion
 
                 if (response.name == "error")
                 {
-                    Console.WriteLine($"!!! An error occured: {response.error}");
+                    Console.WriteLine($" <!> An error occured: {response.error}");
                     if (response.error == ResponseErrors.unknown_user)
                     {
                         config.AskForNick();
@@ -219,7 +230,7 @@ namespace microStudioCompanion
             }
 
             System.IO.File.WriteAllText(tokenInfoFilePath, JsonSerializer.Serialize(response));
-            Console.WriteLine($"Token data saved IN PLAIN TEXT, READABLE BY ANYONE, here: {tokenInfoFilePath}");
+            Console.WriteLine($" [i] Token data saved IN PLAIN TEXT, READABLE BY ANYONE, here: {tokenInfoFilePath}");
             return token;
         }
 
@@ -252,11 +263,11 @@ namespace microStudioCompanion
         {
             var requestText = JsonSerializer.Serialize(requestData);
 
-            Console.WriteLine($"Sending {requestData.name} request");
+            //Console.WriteLine($"Sending {requestData.name} request");
             socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(requestText)), WebSocketMessageType.Text, true, CancellationToken.None).Wait();
 
             var buffer = new byte[99999999];
-            Console.WriteLine($"Receiving {requestData.name} response");
+            //Console.WriteLine($"Receiving {requestData.name} response");
 
             var result = socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None).Result;
             var resultText = Encoding.UTF8.GetString(buffer, 0, result.Count);
