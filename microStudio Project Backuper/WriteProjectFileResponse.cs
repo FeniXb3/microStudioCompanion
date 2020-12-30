@@ -4,11 +4,9 @@ using System.Text;
 
 namespace microStudio_Project_Backuper
 {
-    public class WriteProjectFileResponse
+    public class WriteProjectFileResponse : ResponseBase
     {
-        public string name { get; set; }
         public int version { get; set; }
         public int size { get; set; }
-        public int request_id { get; set; }
     }
 }

@@ -4,14 +4,12 @@ using System.Text;
 
 namespace microStudio_Project_Backuper
 {
-    public class GetProjectListResponse
+    public class GetProjectListResponse : ResponseBase
     {
-        public string name { get; set; }
-        public List[] list { get; set; }
-        public int request_id { get; set; }
+        public Project[] list { get; set; }
     }
 
-    public class List
+    public class Project
     {
         public int id { get; set; }
         public Owner owner { get; set; }

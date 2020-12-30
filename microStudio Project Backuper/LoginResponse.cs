@@ -1,9 +1,8 @@
 ﻿
 namespace microStudio_Project_Backuper
 {
-    public class LoginResponse
+    public class LoginResponse : ResponseBase
     {
-        public string name { get; set; }
         public string token { get; set; }
         public string nick { get; set; }
         public string email { get; set; }
@@ -11,7 +10,6 @@ namespace microStudio_Project_Backuper
         public Info info { get; set; }
         public Settings settings { get; set; }
         public object[] notifications { get; set; }
-        public int request_id { get; set; }
     }
 
     public class Flags
