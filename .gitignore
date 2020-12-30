@@ -1,4 +1,12 @@
 .vscode/
 .vs/
-bin/
-obj/
+[Bb]in/
+[Oo]bj/
+[Dd]ebug]/
+[Rr]elease/
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates

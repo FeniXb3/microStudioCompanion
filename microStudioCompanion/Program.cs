@@ -25,7 +25,7 @@ namespace microStudioCompanion
             }
 
             var host = "https://microstudio.dev";
-            var loginInfoFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "loginInfo.JSON");
+            var tokenInfoFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "tokenInfo.JSON");
             Config config = Config.Get();
 
             using (var socket = new ClientWebSocket())
@@ -33,7 +33,7 @@ namespace microStudioCompanion
                 using (var webClient = new WebClient())
                 {
                     socket.ConnectAsync(new Uri("wss://microstudio.dev"), CancellationToken.None).Wait();
-                    string token = GetToken(loginInfoFilePath, config, socket);
+                    string token = GetToken(tokenInfoFilePath, config, socket);
 
                     Console.WriteLine("Token is valid.");
                     if (mode == "pull")
@@ -164,23 +164,23 @@ namespace microStudioCompanion
             return projects;
         }
 
-        private static string GetToken(string loginInfoFilePath, Config config, ClientWebSocket socket)
+        private static string GetToken(string tokenInfoFilePath, Config config, ClientWebSocket socket)
         {
             string token = null;
-            if (System.IO.File.Exists(loginInfoFilePath))
+            if (System.IO.File.Exists(tokenInfoFilePath))
             {
-                token = GetSavedToken(loginInfoFilePath, socket);
+                token = GetSavedToken(tokenInfoFilePath, socket);
             }
 
             if (token == null)
             {
-                token = Login(loginInfoFilePath, config, socket, token);
+                token = Login(tokenInfoFilePath, config, socket, token);
             }
 
             return token;
         }
 
-        private static string Login(string loginInfoFilePath, Config config, ClientWebSocket socket, string token)
+        private static string Login(string tokenInfoFilePath, Config config, ClientWebSocket socket, string token)
         {
             LoginResponse response = null;
             while (token == null)
@@ -209,8 +209,8 @@ namespace microStudioCompanion
                 token = response.token;
             }
 
-            System.IO.File.WriteAllText(loginInfoFilePath, JsonSerializer.Serialize(response));
-            Console.WriteLine($"Login data saved IN PLAIN TEXT, READABLE BY ANYONE, here: {loginInfoFilePath}");
+            System.IO.File.WriteAllText(tokenInfoFilePath, JsonSerializer.Serialize(response));
+            Console.WriteLine($"Token data saved IN PLAIN TEXT, READABLE BY ANYONE, here: {tokenInfoFilePath}");
             return token;
         }
 

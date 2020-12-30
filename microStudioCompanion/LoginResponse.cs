@@ -4,12 +4,12 @@ namespace microStudioCompanion
     public class LoginResponse : ResponseBase
     {
         public string token { get; set; }
-        public string nick { get; set; }
-        public string email { get; set; }
-        public Flags flags { get; set; }
-        public Info info { get; set; }
-        public Settings settings { get; set; }
-        public object[] notifications { get; set; }
+        //public string nick { get; set; }
+        //public string email { get; set; }
+        //public Flags flags { get; set; }
+        //public Info info { get; set; }
+        //public Settings settings { get; set; }
+        //public object[] notifications { get; set; }
     }
 
     public class Flags

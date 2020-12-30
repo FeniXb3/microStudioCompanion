@@ -9,6 +9,7 @@ namespace microStudioCompanion
     public class Config
     {
         public static string configFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "config.JSON");
+        public static string defaultProjectsDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         public string nick { get; set; }
         public string localDirectory { get; set; }
 
@@ -46,8 +47,13 @@ namespace microStudioCompanion
         {
             do
             {
-                Console.Write("Local projects parent directory (it must exist): ");
+                
+                Console.Write($"Local projects parent directory (it must exist) (leave empty to leave default - {defaultProjectsDirectory}): ");
                 this.localDirectory = Console.ReadLine();
+                if (string.IsNullOrWhiteSpace(localDirectory))
+                {
+                    localDirectory = defaultProjectsDirectory;
+                }
             } while (!Directory.Exists(this.localDirectory));
         }
 
