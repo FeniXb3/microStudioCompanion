@@ -8,6 +8,9 @@ To use it, you have to provide your login and password for your microStudio acco
 
 I have checked some possible edge cases, but I cannot guarantee it will work in all possible setups.
 
+### Important note
+**Directories** with your project files are **removed** from your local project directory before files are downloaded​. It is done to make sure you will not have offline copy of files that were deleted in microStudio.
+
 ## Plans
 My target is to add ability to update and delete files on microStudio from your machine.
 
