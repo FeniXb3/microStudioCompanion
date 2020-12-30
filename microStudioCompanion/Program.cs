@@ -48,6 +48,13 @@ namespace microStudioCompanion
                     }
                 }
             }
+            Console.WriteLine();
+            Console.WriteLine("----------------------------------------------------------------------");
+            Console.WriteLine("| Done! Have a great day and enjoy making games!");
+            Console.WriteLine("| If you want to contact me, write me an email: konrad@makegames.today");
+            Console.WriteLine("| You can donate me at https://fenix.itch.io/microstudio-companion");
+            Console.WriteLine("----------------------------------------------------------------------");
+            Console.WriteLine();
         }
 
         private static void PullFiles(string projectSlug, string host, Config config, ClientWebSocket socket, WebClient webClient)
