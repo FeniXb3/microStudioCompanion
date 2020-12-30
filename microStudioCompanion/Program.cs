@@ -247,6 +247,11 @@ namespace microStudioCompanion
                     token = token
                 };
                 var tokenResponse = SendAndReceive<TokenRequest, TokenResponse>(socket, tokenRequest);
+                if (tokenResponse.name == "error")
+                {
+                    Console.WriteLine($" <!> An error occured: {tokenResponse.error}");
+                    token = null;
+                }
             }
             catch (Exception e)
             {
