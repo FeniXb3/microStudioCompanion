@@ -67,10 +67,10 @@ namespace microStudioCompanion
             var remoteDirectories = new[] { "ms", "sprites", "maps", "doc" };
             var localDirectoryMapping = new Dictionary<string, string>
                         {
-                            { "ms", "code" },
+                            { "ms", "ms" },
                             { "sprites", "sprites" },
                             { "maps", "maps" },
-                            { "doc", "docs" }
+                            { "doc", "doc" }
                         };
 
             foreach (var dir in remoteDirectories)
