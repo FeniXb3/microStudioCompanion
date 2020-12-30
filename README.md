@@ -10,3 +10,7 @@ I have checked some possible edge cases, but I cannot guarantee it will work in 
 
 ## Plans
 My target is to add ability to update and delete files on microStudio from your machine.
+
+## Executable
+You can get Windows executable from itch.io - <https://fenix.itch.io/microstudio-companion>
+You can also donate me there. :)
