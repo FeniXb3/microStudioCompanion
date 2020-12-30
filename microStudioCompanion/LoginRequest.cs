@@ -1,5 +1,5 @@
 ﻿
-namespace microStudio_Project_Backuper
+namespace microStudioCompanion
 {
     public class LoginRequest : RequestBase
     {

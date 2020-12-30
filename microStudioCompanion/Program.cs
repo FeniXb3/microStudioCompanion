@@ -7,7 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 
-namespace microStudio_Project_Backuper
+namespace microStudioCompanion
 {
     class Program
     {

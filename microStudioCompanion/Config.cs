@@ -4,7 +4,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 
-namespace microStudio_Project_Backuper
+namespace microStudioCompanion
 {
     public class Config
     {

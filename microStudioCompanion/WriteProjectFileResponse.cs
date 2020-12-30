@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace microStudio_Project_Backuper
+namespace microStudioCompanion
 {
     public class WriteProjectFileResponse : ResponseBase
     {
