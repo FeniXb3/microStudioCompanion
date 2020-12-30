@@ -55,6 +55,8 @@ namespace microStudioCompanion
             Console.WriteLine("| You can donate me at https://fenix.itch.io/microstudio-companion");
             Console.WriteLine("----------------------------------------------------------------------");
             Console.WriteLine();
+            Console.WriteLine("Press enter to close the app.");
+            Console.ReadLine();
         }
 
         private static void PullFiles(string projectSlug, string host, Config config, ClientWebSocket socket, WebClient webClient)
