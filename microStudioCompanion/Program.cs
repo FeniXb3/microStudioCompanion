@@ -6,6 +6,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using microStudioCompanion.Extensions;
 
 namespace microStudioCompanion
 {
@@ -32,7 +33,6 @@ namespace microStudioCompanion
             }
 
             var host = "https://microstudio.dev";
-            var tokenInfoFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "tokenInfo.JSON");
             Config config = Config.Get();
 
             using (var socket = new ClientWebSocket())
@@ -40,7 +40,7 @@ namespace microStudioCompanion
                 using (var webClient = new WebClient())
                 {
                     socket.ConnectAsync(new Uri("wss://microstudio.dev"), CancellationToken.None).Wait();
-                    string token = GetToken(tokenInfoFilePath, config, socket);
+                    string token = TokenHandler.GetToken(config, socket);
 
                     //Console.WriteLine("Token is valid.");
                     if (mode == "pull")
@@ -103,7 +103,7 @@ namespace microStudioCompanion
 
 
 
-                var listProjectFilesResponse = SendAndReceive<ListProjectFilesRequest, ListProjectFilesResponse>(socket, listProjectFilesRequest);
+                var listProjectFilesResponse = socket.SendAndReceive<ListProjectFilesRequest, ListProjectFilesResponse>(listProjectFilesRequest);
                 if (listProjectFilesResponse.files.Length == 0)
                 {
                     continue;
@@ -174,7 +174,7 @@ namespace microStudioCompanion
         private static Dictionary<string, Project> GetProjects(ClientWebSocket socket)
         {
             var getProjectListRequest = new GetProjectListRequest();
-            var getProjectListResponse = SendAndReceive<GetProjectListRequest, GetProjectListResponse>(socket, getProjectListRequest);
+            var getProjectListResponse = socket.SendAndReceive<GetProjectListRequest, GetProjectListResponse>(getProjectListRequest);
             var projects = new Dictionary<string, Project>();
             foreach (var element in getProjectListResponse.list)
             {
@@ -182,103 +182,6 @@ namespace microStudioCompanion
             }
 
             return projects;
-        }
-
-        private static string GetToken(string tokenInfoFilePath, Config config, ClientWebSocket socket)
-        {
-            string token = null;
-            if (System.IO.File.Exists(tokenInfoFilePath))
-            {
-                token = GetSavedToken(tokenInfoFilePath, socket);
-            }
-
-            if (token == null)
-            {
-                token = Login(tokenInfoFilePath, config, socket, token);
-            }
-
-            return token;
-        }
-
-        private static string Login(string tokenInfoFilePath, Config config, ClientWebSocket socket, string token)
-        {
-            LoginResponse response = null;
-            while (token == null)
-            {
-                Console.Write(" (?) Your microStudio password: ");
-                var password = Console.ReadLine();
-
-                var loginRequest = new LoginRequest
-                {
-                    nick = config.nick,
-                    password = password
-                };
-
-                response = SendAndReceive<LoginRequest, LoginResponse>(socket, loginRequest);
-
-                if (response.name == "error")
-                {
-                    Console.WriteLine($" <!> An error occured: {response.error}");
-                    if (response.error == ResponseErrors.unknown_user)
-                    {
-                        config.AskForNick();
-                        config.Save();
-                    }
-                }
-
-                token = response.token;
-            }
-
-            System.IO.File.WriteAllText(tokenInfoFilePath, JsonSerializer.Serialize(response));
-            Console.WriteLine($" [i] Token data saved IN PLAIN TEXT, READABLE BY ANYONE, here: {tokenInfoFilePath}");
-            return token;
-        }
-
-        private static string GetSavedToken(string loginInfoFilePath, ClientWebSocket socket)
-        {
-            string token;
-            try
-            {
-                var content = JsonSerializer.Deserialize<LoginResponse>(System.IO.File.ReadAllText(loginInfoFilePath));
-                token = content.token;
-
-                var tokenRequest = new TokenRequest
-                {
-                    token = token
-                };
-                var tokenResponse = SendAndReceive<TokenRequest, TokenResponse>(socket, tokenRequest);
-                if (tokenResponse.name == "error")
-                {
-                    Console.WriteLine($" <!> An error occured: {tokenResponse.error}");
-                    token = null;
-                }
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.Message);
-                token = null;
-            }
-
-            return token;
-        }
-
-        static ResponseType SendAndReceive<RequestType, ResponseType>(ClientWebSocket socket, RequestType requestData)
-            where RequestType : RequestBase
-            where ResponseType : ResponseBase
-        {
-            var requestText = JsonSerializer.Serialize(requestData);
-
-            //Console.WriteLine($"Sending {requestData.name} request");
-            socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(requestText)), WebSocketMessageType.Text, true, CancellationToken.None).Wait();
-
-            var buffer = new byte[99999999];
-            //Console.WriteLine($"Receiving {requestData.name} response");
-
-            var result = socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None).Result;
-            var resultText = Encoding.UTF8.GetString(buffer, 0, result.Count);
-            var response = JsonSerializer.Deserialize<ResponseType>(resultText);
-
-            return response;
         }
     }
 }
