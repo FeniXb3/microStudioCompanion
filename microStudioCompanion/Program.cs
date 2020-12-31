@@ -23,12 +23,18 @@ namespace microStudioCompanion
 
             var mode = "pull";
             var projectSlug = "";
+            string filePath = null;
             if (args.Length > 0)
             {
                 mode = args[0];
                 if (args.Length > 1)
                 {
                     projectSlug = args[1];
+                }
+
+                if (args.Length > 2)
+                {
+                    filePath = args[2];
                 }
             }
 
@@ -43,15 +49,20 @@ namespace microStudioCompanion
                     string token = TokenHandler.GetToken(config, socket);
 
                     //Console.WriteLine("Token is valid.");
-                    if (mode == "pull")
+                    switch (mode)
                     {
-                        if (!Directory.Exists(config.localDirectory))
-                        {
-                            Console.WriteLine($" <!> Parent directory for your projects ({config.localDirectory}) does not exist.");
-                            config.AskForDirectory();
-                            config.Save();
-                        }
-                        PullFiles(projectSlug, host, config, socket, webClient);
+                        case "pull":
+                            if (!Directory.Exists(config.localDirectory))
+                            {
+                                Console.WriteLine($" <!> Parent directory for your projects ({config.localDirectory}) does not exist.");
+                                config.AskForDirectory();
+                                config.Save();
+                            }
+                            PullFiles(projectSlug, host, config, socket, webClient);
+                            break;
+                        case "push-file":
+                            PushFile(filePath, projectSlug, host, config, socket, webClient);
+                            break;
                     }
                 }
             }
@@ -66,6 +77,40 @@ namespace microStudioCompanion
             {
                 Console.WriteLine("Press enter to close the app.");
                 Console.ReadLine();
+            }
+        }
+
+        private static void PushFile(string filePath, string projectSlug, string host, Config config, ClientWebSocket socket, WebClient webClient)
+        {
+            var projects = GetProjects(socket);
+            Project selectedProject = SelectProject(ref projectSlug, projects);
+            var localFilePath = Path.Combine(config.localDirectory, selectedProject.title, filePath);
+
+            var lockProjectFileRequest = new LockProjectFileRequest
+            {
+                file = filePath,
+                project = selectedProject.id
+            };
+            Console.WriteLine($" [i] Locking file {filePath} in project {selectedProject.slug}");
+            socket.SendRequest(lockProjectFileRequest);
+            var content = System.IO.File.ReadAllText(localFilePath);
+
+            var writeRequest = new WriteProjectFileRequest
+            {
+                project = selectedProject.id,
+                file = filePath,
+                content = content
+            };
+
+            Console.WriteLine($" [i] Writing file {filePath} in project {selectedProject.slug}");
+            var writeResponse = socket.SendAndReceive<WriteProjectFileRequest, WriteProjectFileResponse>(writeRequest);
+            if (writeResponse.name == "error")
+            {
+                Console.WriteLine($" <!> An error occured: {writeResponse.error}");
+            }
+            else
+            {
+                Console.WriteLine($" [i] Writing of file {filePath} completed");
             }
         }
 

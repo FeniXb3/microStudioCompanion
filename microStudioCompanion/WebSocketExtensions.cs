@@ -27,5 +27,14 @@ namespace microStudioCompanion.Extensions
 
             return response;
         }
+
+        public static void SendRequest<RequestType>(this ClientWebSocket socket, RequestType requestData)
+            where RequestType : RequestBase
+        {
+            var requestText = JsonSerializer.Serialize(requestData);
+
+            //Console.WriteLine($"Sending {requestData.name} request");
+            socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(requestText)), WebSocketMessageType.Text, true, CancellationToken.None).Wait();
+        }
     }
 }
