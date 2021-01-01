@@ -12,8 +12,10 @@ namespace microStudioCompanion
 {
     class Program
     {
+        static string projectSlug;
         static void Main(string[] args)
         {
+
             Console.WriteLine(" ----------------------------------------------------------------------");
             Console.WriteLine("| Welcome to microStudio Companion! Let's backup your game! :)         |");
             Console.WriteLine("| If you want to contact me, write me an email: konrad@makegames.today |");
@@ -22,7 +24,7 @@ namespace microStudioCompanion
             Console.WriteLine();
 
             var mode = "pull";
-            var projectSlug = "";
+            projectSlug = "";
             string filePath = null;
             if (args.Length > 0)
             {
@@ -39,7 +41,8 @@ namespace microStudioCompanion
             }
 
             var host = "https://microstudio.dev";
-            Config config = Config.Get();
+            var config = Config.Get();
+
 
             using (var socket = new ClientWebSocket())
             {
@@ -61,7 +64,12 @@ namespace microStudioCompanion
                             PullFiles(projectSlug, host, config, socket, webClient);
                             break;
                         case "push-file":
-                            PushFile(filePath, projectSlug, host, config, socket, webClient);
+                            var projects = GetProjects(socket);
+                            Project selectedProject = SelectProject(ref projectSlug, projects);
+                            PushFile(filePath, selectedProject, config, socket);
+                            break;
+                        case "watch":
+                            WatchProject(projectSlug, config, socket);
                             break;
                     }
                 }
@@ -80,10 +88,81 @@ namespace microStudioCompanion
             }
         }
 
-        private static void PushFile(string filePath, string projectSlug, string host, Config config, ClientWebSocket socket, WebClient webClient)
+        private static void WatchProject(string projectSlug, Config config, ClientWebSocket socket)
         {
             var projects = GetProjects(socket);
             Project selectedProject = SelectProject(ref projectSlug, projects);
+            var localProjectPath = Path.Combine(config.localDirectory, selectedProject.title);
+
+            FileSystemWatcher fileSystemWatcher = new FileSystemWatcher(localProjectPath);
+            fileSystemWatcher.IncludeSubdirectories = true;
+
+            while (true)
+            {
+                var result = fileSystemWatcher.WaitForChanged(WatcherChangeTypes.All);
+                var filePath = result.Name.Replace('\\', '/');
+
+                switch (result.ChangeType)
+                {
+                    case WatcherChangeTypes.Created:
+                        if (Path.GetExtension(filePath) == ".ms")
+                        {
+                            PushFile(filePath, selectedProject, config, socket);
+                        }
+                        break;
+                    case WatcherChangeTypes.Deleted:
+                        DeleteFile(filePath, selectedProject, config, socket);
+                        break;
+                    case WatcherChangeTypes.Changed:
+                        if (Path.GetExtension(filePath) == ".ms")
+                        {
+                            PushFile(filePath, selectedProject, config, socket);
+                        }
+                        break;
+                    case WatcherChangeTypes.Renamed:
+                        if (Path.GetExtension(filePath) == ".ms")
+                        {
+                            var oldFilePath = result.OldName.Replace('\\', '/');
+                            DeleteFile(oldFilePath, selectedProject, config, socket);
+                            PushFile(filePath, selectedProject, config, socket);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+
+        private static void DeleteFile(string filePath, Project selectedProject, Config config, ClientWebSocket socket)
+        {
+            var lockProjectFileRequest = new LockProjectFileRequest
+            {
+                file = filePath,
+                project = selectedProject.id
+            };
+            Console.WriteLine($" [i] Locking file {filePath} in project {selectedProject.slug}");
+            socket.SendRequest(lockProjectFileRequest);
+
+            var deleteRequest = new DeleteProjectFileRequest
+            {
+                project = selectedProject.id,
+                file = filePath
+            };
+
+            Console.WriteLine($" [i] Deleting file {filePath} in project {selectedProject.slug}");
+            var deleteResponse = socket.SendAndReceive<DeleteProjectFileRequest, DeleteProjectFileResponse>(deleteRequest);
+            if (deleteResponse.name == "error")
+            {
+                Console.WriteLine($" <!> An error occured: {deleteResponse.error}");
+            }
+            else
+            {
+                Console.WriteLine($" [i] Deleting of file {filePath} completed");
+            }
+        }
+
+        private static void PushFile(string filePath, Project selectedProject, Config config, ClientWebSocket socket)
+        {
             var localFilePath = Path.Combine(config.localDirectory, selectedProject.title, filePath);
 
             var lockProjectFileRequest = new LockProjectFileRequest
@@ -93,7 +172,16 @@ namespace microStudioCompanion
             };
             Console.WriteLine($" [i] Locking file {filePath} in project {selectedProject.slug}");
             socket.SendRequest(lockProjectFileRequest);
-            var content = System.IO.File.ReadAllText(localFilePath);
+            string content;
+            try
+            {
+                content = System.IO.File.ReadAllText(localFilePath);
+            }
+            catch
+            {
+                Thread.Sleep(300);
+                content = System.IO.File.ReadAllText(localFilePath);
+            }
 
             var writeRequest = new WriteProjectFileRequest
             {

@@ -9,6 +9,7 @@ namespace microStudioCompanion.Extensions
 {
     static class WebSocketExtensions
     {
+        static int receiveCount = 0;
         public static ResponseType SendAndReceive<RequestType, ResponseType>(this ClientWebSocket socket, RequestType requestData)
             where RequestType : RequestBase
             where ResponseType : ResponseBase
@@ -21,7 +22,13 @@ namespace microStudioCompanion.Extensions
             var buffer = new byte[99999999];
             //Console.WriteLine($"Receiving {requestData.name} response");
 
+            //while (receiveCount != 0)
+            //{
+            //    Console.Write("Waiting...");
+            //}
+            receiveCount += 1;
             var result = socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None).Result;
+            receiveCount -= 1;
             var resultText = Encoding.UTF8.GetString(buffer, 0, result.Count);
             var response = JsonSerializer.Deserialize<ResponseType>(resultText);
 
