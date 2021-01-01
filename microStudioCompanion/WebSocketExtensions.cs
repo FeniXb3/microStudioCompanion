@@ -41,6 +41,7 @@ namespace microStudioCompanion.Extensions
             var requestText = JsonSerializer.Serialize(requestData);
 
             //Console.WriteLine($"Sending {requestData.name} request");
+            // SocketException - "Unable to read data from the transport connection: Broken pipe."
             socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(requestText)), WebSocketMessageType.Text, true, CancellationToken.None).Wait();
         }
     }
