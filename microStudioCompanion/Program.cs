@@ -105,27 +105,18 @@ namespace microStudioCompanion
                 switch (result.ChangeType)
                 {
                     case WatcherChangeTypes.Created:
-                        if (Path.GetExtension(filePath) == ".ms")
-                        {
-                            PushFile(filePath, selectedProject, config, socket);
-                        }
+                        PushFile(filePath, selectedProject, config, socket);
                         break;
                     case WatcherChangeTypes.Deleted:
                         DeleteFile(filePath, selectedProject, config, socket);
                         break;
                     case WatcherChangeTypes.Changed:
-                        if (Path.GetExtension(filePath) == ".ms")
-                        {
-                            PushFile(filePath, selectedProject, config, socket);
-                        }
+                        PushFile(filePath, selectedProject, config, socket);
                         break;
                     case WatcherChangeTypes.Renamed:
-                        if (Path.GetExtension(filePath) == ".ms")
-                        {
-                            var oldFilePath = result.OldName.Replace('\\', '/');
-                            DeleteFile(oldFilePath, selectedProject, config, socket);
-                            PushFile(filePath, selectedProject, config, socket);
-                        }
+                        var oldFilePath = result.OldName.Replace('\\', '/');
+                        DeleteFile(oldFilePath, selectedProject, config, socket);
+                        PushFile(filePath, selectedProject, config, socket);
                         break;
                     default:
                         break;
@@ -163,8 +154,6 @@ namespace microStudioCompanion
 
         private static void PushFile(string filePath, Project selectedProject, Config config, ClientWebSocket socket)
         {
-            var localFilePath = Path.Combine(config.localDirectory, selectedProject.title, filePath);
-
             var lockProjectFileRequest = new LockProjectFileRequest
             {
                 file = filePath,
@@ -172,15 +161,21 @@ namespace microStudioCompanion
             };
             Console.WriteLine($" [i] Locking file {filePath} in project {selectedProject.slug}");
             socket.SendRequest(lockProjectFileRequest);
+            
             string content;
             try
             {
-                content = System.IO.File.ReadAllText(localFilePath);
+                content = ReadFileContent(filePath, selectedProject, config);
+            }
+            catch (FileNotFoundException)
+            {
+                Console.WriteLine($" <i> File {filePath} in project {selectedProject.slug} does not exist");
+                return;
             }
             catch
             {
                 Thread.Sleep(300);
-                content = System.IO.File.ReadAllText(localFilePath);
+                content = ReadFileContent(filePath, selectedProject, config);
             }
 
             var writeRequest = new WriteProjectFileRequest
@@ -200,6 +195,24 @@ namespace microStudioCompanion
             {
                 Console.WriteLine($" [i] Writing of file {filePath} completed");
             }
+        }
+
+        private static string ReadFileContent(string filePath, Project selectedProject, Config config)
+        {
+            string content;
+            var localFilePath = Path.Combine(config.localDirectory, selectedProject.title, filePath);
+            var extension = Path.GetExtension(filePath);
+            switch (extension)
+            {
+                case ".png":
+                    content = Convert.ToBase64String(System.IO.File.ReadAllBytes(localFilePath));
+                    break;
+                default:
+                    content = System.IO.File.ReadAllText(localFilePath);
+                    break;
+            }
+
+            return content;
         }
 
         private static void PullFiles(string projectSlug, string host, Config config, ClientWebSocket socket, WebClient webClient)
