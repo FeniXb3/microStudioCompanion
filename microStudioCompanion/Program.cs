@@ -13,6 +13,9 @@ namespace microStudioCompanion
     class Program
     {
         static string projectSlug;
+        static Project selectedProject;
+        static Config config;
+        static ClientWebSocket socket;
         static void Main(string[] args)
         {
 
@@ -41,10 +44,10 @@ namespace microStudioCompanion
             }
 
             var host = "https://microstudio.dev";
-            var config = Config.Get();
+            config = Config.Get();
 
 
-            using (var socket = new ClientWebSocket())
+            using (socket = new ClientWebSocket())
             {
                 using (var webClient = new WebClient())
                 {
@@ -91,37 +94,81 @@ namespace microStudioCompanion
         private static void WatchProject(string projectSlug, Config config, ClientWebSocket socket)
         {
             var projects = GetProjects(socket);
-            Project selectedProject = SelectProject(ref projectSlug, projects);
+            selectedProject = SelectProject(ref projectSlug, projects);
             var localProjectPath = Path.Combine(config.localDirectory, selectedProject.title);
 
-            FileSystemWatcher fileSystemWatcher = new FileSystemWatcher(localProjectPath);
-            fileSystemWatcher.IncludeSubdirectories = true;
+            FileSystemWatcher fileSystemWatcher = new FileSystemWatcher(localProjectPath)
+            {
+                IncludeSubdirectories = true,
+                Filters = { "*.ms", "*.png", "*.json", "*.md" },
+                EnableRaisingEvents = true,
+                NotifyFilter = NotifyFilters.FileName
+                    | NotifyFilters.DirectoryName
+                    | NotifyFilters.Attributes
+                    | NotifyFilters.Size
+                    | NotifyFilters.LastWrite
+                    | NotifyFilters.LastAccess
+                    | NotifyFilters.CreationTime
+                    | NotifyFilters.Security
+            };
+            fileSystemWatcher.Changed += FileSystemWatcher_Changed;
+            fileSystemWatcher.Renamed += FileSystemWatcher_Renamed;
+            fileSystemWatcher.Created += FileSystemWatcher_Created;
+            fileSystemWatcher.Deleted += FileSystemWatcher_Deleted;
+
 
             while (true)
             {
-                var result = fileSystemWatcher.WaitForChanged(WatcherChangeTypes.All);
-                var filePath = result.Name.Replace('\\', '/');
 
-                switch (result.ChangeType)
-                {
-                    case WatcherChangeTypes.Created:
-                        PushFile(filePath, selectedProject, config, socket);
-                        break;
-                    case WatcherChangeTypes.Deleted:
-                        DeleteFile(filePath, selectedProject, config, socket);
-                        break;
-                    case WatcherChangeTypes.Changed:
-                        PushFile(filePath, selectedProject, config, socket);
-                        break;
-                    case WatcherChangeTypes.Renamed:
-                        var oldFilePath = result.OldName.Replace('\\', '/');
-                        DeleteFile(oldFilePath, selectedProject, config, socket);
-                        PushFile(filePath, selectedProject, config, socket);
-                        break;
-                    default:
-                        break;
-                }
             }
+        }
+
+        private static void FileSystemWatcher_Deleted(object sender, FileSystemEventArgs e)
+        {
+            var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
+            if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
+            {
+                return;
+            }
+            var filePath = e.Name.Replace('\\', '/');
+            DeleteFile(filePath, selectedProject, config, socket);
+        }
+
+        private static void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
+        {
+            var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
+            if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
+            {
+                return;
+            }
+            var filePath = e.Name.Replace('\\', '/');
+
+            PushFile(filePath, selectedProject, config, socket);
+        }
+
+        private static void FileSystemWatcher_Renamed(object sender, RenamedEventArgs e)
+        {
+            var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
+            if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
+            {
+                return;
+            }
+            var filePath = e.Name.Replace('\\', '/');
+            var oldFilePath = e.OldName.Replace('\\', '/');
+            DeleteFile(oldFilePath, selectedProject, config, socket);
+            PushFile(filePath, selectedProject, config, socket);
+        }
+
+        private static void FileSystemWatcher_Changed(object sender, FileSystemEventArgs e)
+        {
+            var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
+            if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
+            {
+                return;
+            }
+            var filePath = e.Name.Replace('\\', '/');
+
+            PushFile(filePath, selectedProject, config, socket);
         }
 
         private static void DeleteFile(string filePath, Project selectedProject, Config config, ClientWebSocket socket)
