@@ -12,6 +12,10 @@ namespace microStudioCompanion
         {
             name = "create_project";
         }
+        public override string Serialize()
+        {
+            return System.Text.Json.JsonSerializer.Serialize(this);
+        }
     }
 
 }

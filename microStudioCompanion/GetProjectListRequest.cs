@@ -10,5 +10,9 @@ namespace microStudioCompanion
         {
             name = "get_project_list";
         }
+        public override string Serialize()
+        {
+            return System.Text.Json.JsonSerializer.Serialize(this);
+        }
     }
 }

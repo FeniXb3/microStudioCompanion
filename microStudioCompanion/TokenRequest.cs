@@ -12,5 +12,10 @@ namespace microStudioCompanion
         {
             name = "token";
         }
+
+        public override string Serialize()
+        {
+            return System.Text.Json.JsonSerializer.Serialize(this);
+        }
     }
 }

@@ -13,6 +13,10 @@ namespace microStudioCompanion
         {
             name = "list_project_files";
         }
-    }
 
+        public override string Serialize()
+        {
+            return System.Text.Json.JsonSerializer.Serialize(this);
+        }
+    }
 }

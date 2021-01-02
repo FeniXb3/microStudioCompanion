@@ -14,6 +14,11 @@ namespace microStudioCompanion
         {
             name = "write_project_file";
         }
+
+        public override string Serialize()
+        {
+            return System.Text.Json.JsonSerializer.Serialize(this);
+        }
     }
 
 }

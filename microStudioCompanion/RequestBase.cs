@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.Json;
 
 namespace microStudioCompanion
 {
@@ -14,5 +15,7 @@ namespace microStudioCompanion
         {
             request_id = lastRequestId++;
         }
+
+        public abstract string Serialize();
     }
 }

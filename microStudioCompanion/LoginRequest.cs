@@ -1,5 +1,4 @@
-﻿
-namespace microStudioCompanion
+﻿namespace microStudioCompanion
 {
     public class LoginRequest : RequestBase
     {
@@ -11,5 +10,9 @@ namespace microStudioCompanion
             name = "login";
         }
 
+        public override string Serialize()
+        {
+            return System.Text.Json.JsonSerializer.Serialize(this);
+        }
     }
 }

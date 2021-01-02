@@ -5,6 +5,7 @@ using System.IO;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using Websocket.Client;
 
 namespace microStudioCompanion
 {
@@ -12,26 +13,21 @@ namespace microStudioCompanion
     {
         public static string tokenInfoFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "tokenInfo.JSON");
 
-        public static string GetToken(Config config, ClientWebSocket socket)
+        public static void GetToken(Config config, WebsocketClient socket)
         {
-            string token = null;
             if (System.IO.File.Exists(tokenInfoFilePath))
             {
-                token = GetSavedToken(socket);
+                GetSavedToken(socket);
             }
-
-            if (token == null)
+            else
             {
-                token = Login(config, socket, token);
+                Login(config, socket);
             }
-
-            return token;
         }
 
-        private static string Login(Config config, ClientWebSocket socket, string token)
+        public static void Login(Config config, WebsocketClient socket)
         {
-            LoginResponse response = null;
-            while (token == null)
+            //while (token == null)
             {
                 Console.Write(" (?) Your microStudio password: ");
                 var password = Console.ReadLine();
@@ -41,53 +37,51 @@ namespace microStudioCompanion
                     nick = config.nick,
                     password = password
                 };
+                socket.Send(loginRequest.Serialize());
 
-                response = socket.SendAndReceive<LoginRequest, LoginResponse>(loginRequest);
+                //response = socket.SendAndReceive<LoginRequest, LoginResponse>(loginRequest);
 
-                if (response.name == "error")
-                {
-                    Console.WriteLine($" <!> An error occured: {response.error}");
-                    if (response.error == ResponseErrors.unknown_user)
-                    {
-                        config.AskForNick();
-                        config.Save();
-                    }
-                }
+                //if (response.name == "error")
+                //{
+                //    Console.WriteLine($" <!> An error occured: {response.error}");
+                //    if (response.error == ResponseErrors.unknown_user)
+                //    {
+                //        config.AskForNick();
+                //        config.Save();
+                //    }
+                //}
 
-                token = response.token;
+                //token = response.token;
             }
-
-            System.IO.File.WriteAllText(tokenInfoFilePath, JsonSerializer.Serialize(response));
-            Console.WriteLine($" [i] Token data saved IN PLAIN TEXT, READABLE BY ANYONE, here: {tokenInfoFilePath}");
-            return token;
         }
 
-        private static string GetSavedToken(ClientWebSocket socket)
+        public static void SaveToken(string token)
         {
-            string token;
+            System.IO.File.WriteAllText(tokenInfoFilePath, token);
+            Console.WriteLine($" [i] Token saved IN PLAIN TEXT, READABLE BY ANYONE, here: {tokenInfoFilePath}");
+        }
+
+        private static void GetSavedToken(WebsocketClient socket)
+        {
             try
             {
-                var content = JsonSerializer.Deserialize<LoginResponse>(System.IO.File.ReadAllText(tokenInfoFilePath));
-                token = content.token;
-
                 var tokenRequest = new TokenRequest
                 {
-                    token = token
+                    token = System.IO.File.ReadAllText(tokenInfoFilePath)
                 };
-                var tokenResponse = socket.SendAndReceive<TokenRequest, TokenResponse>(tokenRequest);
-                if (tokenResponse.name == "error")
-                {
-                    Console.WriteLine($" <!> An error occured: {tokenResponse.error}");
-                    token = null;
-                }
+
+                socket.Send(tokenRequest.Serialize());
+                //var tokenResponse = socket.SendAndReceive<TokenRequest, TokenResponse>(tokenRequest);
+                //if (tokenResponse.name == "error")
+                //{
+                //    Console.WriteLine($" <!> An error occured: {tokenResponse.error}");
+                //    token = null;
+                //}
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
-                token = null;
             }
-
-            return token;
         }
     }
 }
