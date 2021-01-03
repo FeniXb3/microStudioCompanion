@@ -147,7 +147,8 @@ namespace microStudioCompanion
                         //Console.WriteLine($" [i] Writing of file {filePath} completed");
                         break;
                     case ResponseTypes.delete_project_file:
-                        Console.WriteLine(response);
+                        //Console.WriteLine($" [i]-> Deleting of file {filePath} completed");
+                        Console.WriteLine($" [i][->] Deleting of file completed");
                         break;
                     case ResponseTypes.project_file_locked:
                         Console.WriteLine($" [i][->] File {(string)response.file} locked by {(string)response.user}");
@@ -155,6 +156,10 @@ namespace microStudioCompanion
                     case ResponseTypes.project_file_update:
                         Console.WriteLine($" [i][->] File {(string)response.file} updated");
                         UpdateFile((string)response.file, (string)response.content);
+                        break;
+                    case ResponseTypes.project_file_deleted:
+                        Console.WriteLine($" [i][->] File {(string)response.file} deleted");
+                        DeleteFile((string)response.file);
                         break;
                     default:
                         Console.WriteLine($" <!>[->] Unhandled response type: {responseTypeText}");
@@ -185,6 +190,16 @@ namespace microStudioCompanion
                     System.IO.File.WriteAllText(localFilePath, content);
                     break;
             }
+
+            changingFile = false;
+        }
+        private static void DeleteFile(string filePath)
+        {
+            changingFile = true;
+
+            var projectDirectory = (string)selectedProject.title;
+            var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
+            System.IO.File.Delete(localFilePath);
 
             changingFile = false;
         }
@@ -282,7 +297,7 @@ namespace microStudioCompanion
                 return;
             }
             var filePath = e.Name.Replace('\\', '/');
-            DeleteFile(filePath, selectedProject, config, socket);
+            DeleteRemoteFile(filePath, selectedProject, config, socket);
         }
 
         private static void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
@@ -316,7 +331,7 @@ namespace microStudioCompanion
             }
             var filePath = e.Name.Replace('\\', '/');
             var oldFilePath = e.OldName.Replace('\\', '/');
-            DeleteFile(oldFilePath, selectedProject, config, socket);
+            DeleteRemoteFile(oldFilePath, selectedProject, config, socket);
             PushFile(filePath, selectedProject, config, socket);
         }
 
@@ -337,7 +352,7 @@ namespace microStudioCompanion
             PushFile(filePath, selectedProject, config, socket);
         }
 
-        private static void DeleteFile(string filePath, dynamic selectedProject, Config config, WebsocketClient socket)
+        private static void DeleteRemoteFile(string filePath, dynamic selectedProject, Config config, WebsocketClient socket)
         {
             var lockProjectFileRequest = new LockProjectFileRequest
             {
@@ -355,15 +370,6 @@ namespace microStudioCompanion
 
             Console.WriteLine($" [i] Deleting file {filePath} in project {selectedProject.slug}");
             socket.Send(deleteRequest.Serialize());
-            //var deleteResponse = socket.SendAndReceive<DeleteProjectFileRequest, DeleteProjectFileResponse>(deleteRequest);
-            //if (deleteResponse.name == "error")
-            //{
-            //    Console.WriteLine($" <!> An error occured: {deleteResponse.error}");
-            //}
-            //else
-            //{
-            //    Console.WriteLine($" [i] Deleting of file {filePath} completed");
-            //}
         }
 
         private static void PushFile(string filePath, dynamic selectedProject, Config config, WebsocketClient socket)

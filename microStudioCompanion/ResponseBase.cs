@@ -23,6 +23,7 @@ namespace microStudioCompanion
         delete_project_file,
         project_file_locked,
         project_file_update,
+        project_file_deleted,
     }
 
     public enum ResponseErrors
