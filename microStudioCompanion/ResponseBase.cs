@@ -32,6 +32,7 @@ namespace microStudioCompanion
     {
         unknown_user,
         invalid_token,
-        not_connected
+        not_connected,
+        wrong_password
     }
 }

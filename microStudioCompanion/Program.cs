@@ -322,6 +322,10 @@ namespace microStudioCompanion
                     case ResponseErrors.not_connected:
                         TokenHandler.Login(config, socket);
                         break;
+                    case ResponseErrors.wrong_password:
+                        Console.WriteLine(" [->] <!> Wrong password");
+                        TokenHandler.Login(config, socket);
+                        break;
                     default:
                         break;
                 }
@@ -539,7 +543,7 @@ namespace microStudioCompanion
             {
                 if (string.IsNullOrWhiteSpace(projectSlug))
                 {
-                    Console.Write(" (?) Project slug to backup (leave empty to see available projects): ");
+                    Console.Write("      (?) Project slug to backup (leave empty to see available projects): ");
                     projectSlug = Console.ReadLine();
                 }
 

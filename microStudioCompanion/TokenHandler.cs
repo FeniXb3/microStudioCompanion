@@ -22,7 +22,7 @@ namespace microStudioCompanion
 
         public static void Login(Config config, WebsocketClient socket)
         {
-            Console.Write(" (?) Your microStudio password: ");
+            Console.Write("      (?) Your microStudio password: ");
             var password = Console.ReadLine();
             new LoginRequest
             {

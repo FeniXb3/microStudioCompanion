@@ -39,7 +39,7 @@ namespace microStudioCompanion
 
         public void AskForNick()
         {
-            Console.Write(" (?) Your microStudio nick: ");
+            Console.Write("      (?) Your microStudio nick: ");
             this.nick = Console.ReadLine();
         }
 
@@ -47,7 +47,7 @@ namespace microStudioCompanion
         {
             do
             {
-                Console.Write($" (?) Local projects parent directory (it must exist) (leave empty to leave default - {defaultProjectsDirectory}): ");
+                Console.Write($"      (?) Local projects parent directory (it must exist) (leave empty to leave default - {defaultProjectsDirectory}): ");
                 this.localDirectory = Console.ReadLine();
                 if (string.IsNullOrWhiteSpace(localDirectory))
                 {
