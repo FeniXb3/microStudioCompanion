@@ -29,7 +29,7 @@ namespace microStudioCompanion
                 if (name != "ping")
                 {
                     RequestsSent.Add(request_id, this);
-                    Console.WriteLine(Message);
+                    Logger.LogOutgoingInfo(Message);
                 }
                 socket.Send(Serialize());
             }

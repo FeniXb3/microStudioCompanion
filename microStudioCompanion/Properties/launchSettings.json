@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "microStudioCompanion": {
+      "commandName": "Project",
+      "commandLineArgs": "watch fengine"
+    }
+  }
+}
