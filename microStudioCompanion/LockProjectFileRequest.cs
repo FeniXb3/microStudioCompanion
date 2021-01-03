@@ -18,6 +18,6 @@ namespace microStudioCompanion
             return System.Text.Json.JsonSerializer.Serialize(this);
         }
 
-        public override string Message => $" [<-] [i] Locking file {file}";
+        public override string Message => $"  <-  [i] Locking file {file}";
     }
 }

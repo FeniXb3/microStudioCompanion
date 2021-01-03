@@ -229,7 +229,7 @@ namespace microStudioCompanion
                 switch (responseType)
                 {
                     case ResponseTypes.error:
-                        Console.WriteLine($" [->] <!> Error occured: {response.error}");
+                        Console.WriteLine($"  ->  <!> Error occured: {response.error}");
                         HandleError((string)response.error);
                         break;
                     case ResponseTypes.logged_in:
@@ -237,11 +237,11 @@ namespace microStudioCompanion
                         ChangeStep = true;
                         break;
                     case ResponseTypes.token_valid:
-                        Console.WriteLine(" [->] [i] Token valid");
+                        Console.WriteLine("  ->  [i] Token valid");
                         ChangeStep = true;
                         break;
                     case ResponseTypes.project_list:
-                        Console.WriteLine($" [->] [i] Received project list");
+                        Console.WriteLine($"  ->  [i] Received project list");
                         projects = new Dictionary<string, dynamic>();
                         foreach (var element in response.list)
                         {
@@ -250,24 +250,24 @@ namespace microStudioCompanion
                         ChangeStep = true;
                         break;
                     case ResponseTypes.write_project_file:
-                        Console.WriteLine($" [->] [i] Writing of file {RequestBase.GetSentRequest<WriteProjectFileRequest>(requestId).file} completed");
+                        Console.WriteLine($"  ->  [i] Writing of file {RequestBase.GetSentRequest<WriteProjectFileRequest>(requestId).file} completed");
                         break;
                     case ResponseTypes.delete_project_file:
-                        Console.WriteLine($" [->] [i] Deleting of file {RequestBase.GetSentRequest<DeleteProjectFileRequest>(requestId).file} completed");
+                        Console.WriteLine($"  ->  [i] Deleting of file {RequestBase.GetSentRequest<DeleteProjectFileRequest>(requestId).file} completed");
                         break;
                     case ResponseTypes.project_file_locked:
-                        Console.WriteLine($" [->] [i] File {(string)response.file} locked remotely by {(string)response.user}");
+                        Console.WriteLine($"  ->  [i] File {(string)response.file} locked remotely by {(string)response.user}");
                         break;
                     case ResponseTypes.project_file_update:
-                        Console.WriteLine($" [->] [i] File {(string)response.file} updated remotely");
+                        Console.WriteLine($"  ->  [i] File {(string)response.file} updated remotely");
                         UpdateFile((string)response.file, (string)response.content);
                         break;
                     case ResponseTypes.project_file_deleted:
-                        Console.WriteLine($" [->] [i] File {(string)response.file} deleted remotely");
+                        Console.WriteLine($"  ->  [i] File {(string)response.file} deleted remotely");
                         DeleteFile((string)response.file);
                         break;
                     case ResponseTypes.list_project_files:
-                        Console.WriteLine($" [->] [i] Received files list for directory {RequestBase.GetSentRequest<ListProjectFilesRequest>(requestId).folder}");
+                        Console.WriteLine($"  ->  [i] Received files list for directory {RequestBase.GetSentRequest<ListProjectFilesRequest>(requestId).folder}");
                         if (shouldDownloadFiles)
                         {
                             ReadFiles(RequestBase.GetSentRequest<ListProjectFilesRequest>(requestId).folder, response.files);
@@ -280,22 +280,22 @@ namespace microStudioCompanion
                         }
                         break;
                     case ResponseTypes.read_project_file:
-                        Console.WriteLine($" [->] [i] Reading of remote file {RequestBase.GetSentRequest<ReadProjectFileRequest>(requestId).file} completed");
+                        Console.WriteLine($"  ->  [i] Reading of remote file {RequestBase.GetSentRequest<ReadProjectFileRequest>(requestId).file} completed");
                         UpdateFile((string)RequestBase.GetSentRequest<ReadProjectFileRequest>(requestId).file, (string)response.content);
                         Console.WriteLine($"      [i] Local file {RequestBase.GetSentRequest<ReadProjectFileRequest>(requestId).file} updated");
                         break;
                     case ResponseTypes.pong:
                         break;
                     default:
-                        Console.WriteLine($" [->] <!> Unhandled response type: {responseTypeText}");
-                        Console.WriteLine($" [->] Incomming message: {response}");
+                        Console.WriteLine($"  ->  <!> Unhandled response type: {responseTypeText}");
+                        Console.WriteLine($"  ->  Incomming message: {response}");
                         break;
                 }
             }
             else
             {
-                Console.WriteLine($" [->] <!> Unknown response type: {responseTypeText}");
-                Console.WriteLine($" [->] Incomming message: {response}");
+                Console.WriteLine($"  ->  <!> Unknown response type: {responseTypeText}");
+                Console.WriteLine($"  ->  Incomming message: {response}");
             }
         }
 
@@ -354,20 +354,20 @@ namespace microStudioCompanion
                 switch (errorType)
                 {
                     case ResponseErrors.unknown_user:
-                        Console.WriteLine($" [->] <!> Login error occured: {error}");
+                        Console.WriteLine($"  ->  <!> Login error occured: {error}");
                         config.AskForNick();
                         config.Save();
                         TokenHandler.Login(config, socket);
                         break;
                     case ResponseErrors.invalid_token:
-                        Console.WriteLine(" [->] <!> Invalid token");
+                        Console.WriteLine("  ->  <!> Invalid token");
                         TokenHandler.Login(config, socket);
                         break;
                     case ResponseErrors.not_connected:
                         TokenHandler.Login(config, socket);
                         break;
                     case ResponseErrors.wrong_password:
-                        Console.WriteLine(" [->] <!> Wrong password");
+                        Console.WriteLine("  ->  <!> Wrong password");
                         TokenHandler.Login(config, socket);
                         break;
                     default:
@@ -414,7 +414,11 @@ namespace microStudioCompanion
             fileSystemWatcher.Renamed += FileSystemWatcher_Renamed;
             fileSystemWatcher.Created += FileSystemWatcher_Created;
             fileSystemWatcher.Deleted += FileSystemWatcher_Deleted;
-            Console.WriteLine($"      [i] Watching project {(string)selectedProject.title} directory: {localProjectPath}");
+            Console.BackgroundColor = ConsoleColor.Green;
+            Console.ForegroundColor = ConsoleColor.Black;
+            Console.Write($"      [i] Watching project {(string)selectedProject.title} directory: {localProjectPath}");
+            Console.ResetColor();
+            Console.WriteLine();
         }
 
         private static void FileSystemWatcher_Deleted(object sender, FileSystemEventArgs e)
