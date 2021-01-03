@@ -16,10 +16,17 @@ namespace microStudioCompanion
     class Program
     {
         static string projectSlug;
-        static Project selectedProject;
+        static dynamic selectedProject;
         static Dictionary<string, dynamic> projects = new Dictionary<string, dynamic>();
         static Config config;
         static WebsocketClient socket;
+        static int stepNumber = 0;
+        static Dictionary<string, List<Action>> modes;
+        static bool changeStep = false;
+        static string currentMode = "";
+        static bool finished = false;
+        private static bool changingFile = false;
+
         static void Main(string[] args)
         {
 
@@ -30,12 +37,12 @@ namespace microStudioCompanion
             Console.WriteLine(" ----------------------------------------------------------------------");
             Console.WriteLine();
 
-            var mode = "pull";
+            currentMode = "pull";
             projectSlug = "";
             string filePath = null;
             if (args.Length > 0)
             {
-                mode = args[0];
+                currentMode = args[0];
                 if (args.Length > 1)
                 {
                     projectSlug = args[1];
@@ -46,6 +53,13 @@ namespace microStudioCompanion
                     filePath = args[2];
                 }
             }
+            modes = new Dictionary<string, List<Action>>();
+            modes.Add("watch", new List<Action>
+            {
+                () => GetProjects(socket),
+                () => SelectProject(ref projectSlug, projects),
+                () => StartWatching(selectedProject)
+            });
 
             config = Config.Get();
 
@@ -65,15 +79,15 @@ namespace microStudioCompanion
                     TokenHandler.GetToken(config, socket);
 
                     ////Console.WriteLine("Token is valid.");
-                    switch (mode)
+                    switch (currentMode)
                     {
                         case "pull":
-                            //if (!Directory.Exists(config.localDirectory))
-                            //{
-                            //    Console.WriteLine($" <!> Parent directory for your projects ({config.localDirectory}) does not exist.");
-                            //    config.AskForDirectory();
-                            //    config.Save();
-                            //}
+                            if (!Directory.Exists(config.localDirectory))
+                            {
+                                Console.WriteLine($" <!> Parent directory for your projects ({config.localDirectory}) does not exist.");
+                                config.AskForDirectory();
+                                config.Save();
+                            }
                             //PullFiles(projectSlug, host, config, socket, webClient);
                             break;
                         case "push-file":
@@ -103,7 +117,6 @@ namespace microStudioCompanion
 
         private static void HandleResponse(ResponseMessage data)
         {
-            Console.WriteLine($" [<-] Incomming message: {data}");
             var response = JsonConvert.DeserializeObject<dynamic>(data.Text);
             string responseTypeText = response.name;
             if (Enum.TryParse(responseTypeText, out ResponseTypes responseType))
@@ -112,14 +125,14 @@ namespace microStudioCompanion
                 switch (responseType)
                 {
                     case ResponseTypes.error:
-                        Console.WriteLine($" <!> An error occured: {response.error}");
+                        Console.WriteLine($" <!>[->] An error occured: {response.error}");
                         HandleError((string)response.error);
                         break;
                     case ResponseTypes.logged_in:
                         TokenHandler.SaveToken((string)response.token);
                         break;
                     case ResponseTypes.token_valid:
-                        Console.WriteLine(" [i] Token valid");
+                        Console.WriteLine(" [i][->] Token valid");
                         break;
                     case ResponseTypes.project_list:
                         projects = new Dictionary<string, dynamic>();
@@ -127,15 +140,53 @@ namespace microStudioCompanion
                         {
                             projects[(string)element.slug] = element;
                         }
+                        changeStep = true;
+                        break;
+                    case ResponseTypes.write_project_file:
+                        Console.WriteLine($" [i][->] Writing of file completed");
+                        //Console.WriteLine($" [i] Writing of file {filePath} completed");
+                        break;
+                    case ResponseTypes.delete_project_file:
+                        Console.WriteLine(response);
+                        break;
+                    case ResponseTypes.project_file_locked:
+                        Console.WriteLine($" [i][->] File {(string)response.file} locked by {(string)response.user}");
+                        break;
+                    case ResponseTypes.project_file_update:
+                        Console.WriteLine($" [i][->] File {(string)response.file} updated");
+                        UpdateFile((string)response.file, (string)response.content);
                         break;
                     default:
+                        Console.WriteLine($" <!>[->] Unhandled response type: {responseTypeText}");
+                        Console.WriteLine($" [->] Incomming message: {response}");
                         break;
                 }
             }
             else
             {
-                Console.WriteLine($" <!> Unknown response type: {responseTypeText}");
+                Console.WriteLine($" <!>[->] Unknown response type: {responseTypeText}");
+                Console.WriteLine($" [->] Incomming message: {response}");
             }
+        }
+
+        private static void UpdateFile(string filePath, string content)
+        {
+            changingFile = true;
+
+            var projectDirectory = (string)selectedProject.title;
+            var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
+            var extension = Path.GetExtension(filePath);
+            switch (extension)
+            {
+                case ".png":
+                    System.IO.File.WriteAllBytes(localFilePath, Convert.FromBase64String(content));
+                    break;
+                default:
+                    System.IO.File.WriteAllText(localFilePath, content);
+                    break;
+            }
+
+            changingFile = false;
         }
 
         private static void HandleError(string error)
@@ -176,85 +227,117 @@ namespace microStudioCompanion
         }
         private static void WatchProject(string projectSlug, Config config, WebsocketClient socket)
         {
-            var projects = GetProjects(socket);
-            //selectedProject = SelectProject(ref projectSlug, projects);
-            //var localProjectPath = Path.Combine(config.localDirectory, selectedProject.title);
+            stepNumber = 0;
+            modes[currentMode][stepNumber]();
 
-            //FileSystemWatcher fileSystemWatcher = new FileSystemWatcher(localProjectPath)
-            //{
-            //    IncludeSubdirectories = true,
-            //    Filters = { "*.ms", "*.png", "*.json", "*.md" },
-            //    EnableRaisingEvents = true,
-            //    NotifyFilter = NotifyFilters.FileName
-            //        | NotifyFilters.DirectoryName
-            //        | NotifyFilters.Attributes
-            //        | NotifyFilters.Size
-            //        | NotifyFilters.LastWrite
-            //        | NotifyFilters.LastAccess
-            //        | NotifyFilters.CreationTime
-            //        | NotifyFilters.Security
-            //};
-            //fileSystemWatcher.Changed += FileSystemWatcher_Changed;
-            //fileSystemWatcher.Renamed += FileSystemWatcher_Renamed;
-            //fileSystemWatcher.Created += FileSystemWatcher_Created;
-            //fileSystemWatcher.Deleted += FileSystemWatcher_Deleted;
-
-
-            while (true)
+            while (!finished)
             {
-
+                if (changeStep)
+                {
+                    if (stepNumber+1 < modes[currentMode].Count)
+                    {
+                        stepNumber++;
+                        changeStep = false;
+                        modes[currentMode][stepNumber]();
+                    }
+                }
             }
         }
 
-        //private static void FileSystemWatcher_Deleted(object sender, FileSystemEventArgs e)
-        //{
-        //    var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
-        //    if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
-        //    {
-        //        return;
-        //    }
-        //    var filePath = e.Name.Replace('\\', '/');
-        //    DeleteFile(filePath, selectedProject, config, socket);
-        //}
+        private static void StartWatching(dynamic selectedProject)
+        {
+            var localProjectPath = Path.Combine(config.localDirectory, (string)selectedProject.title);
 
-        //private static void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
-        //{
-        //    var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
-        //    if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
-        //    {
-        //        return;
-        //    }
-        //    var filePath = e.Name.Replace('\\', '/');
+            FileSystemWatcher fileSystemWatcher = new FileSystemWatcher(localProjectPath)
+            {
+                IncludeSubdirectories = true,
+                Filters = { "*.ms", "*.png", "*.json", "*.md" },
+                EnableRaisingEvents = true,
+                NotifyFilter = NotifyFilters.FileName
+                    | NotifyFilters.DirectoryName
+                    | NotifyFilters.Attributes
+                    | NotifyFilters.Size
+                    | NotifyFilters.LastWrite
+                    | NotifyFilters.LastAccess
+                    | NotifyFilters.CreationTime
+                    | NotifyFilters.Security
+            };
+            fileSystemWatcher.Changed += FileSystemWatcher_Changed;
+            fileSystemWatcher.Renamed += FileSystemWatcher_Renamed;
+            fileSystemWatcher.Created += FileSystemWatcher_Created;
+            fileSystemWatcher.Deleted += FileSystemWatcher_Deleted;
+            Console.WriteLine($" [i] Watching project {(string)selectedProject.title} directory: {localProjectPath}");
+        }
 
-        //    PushFile(filePath, selectedProject, config, socket);
-        //}
+        private static void FileSystemWatcher_Deleted(object sender, FileSystemEventArgs e)
+        {
+            if (changingFile)
+            {
+                return;
+            }
 
-        //private static void FileSystemWatcher_Renamed(object sender, RenamedEventArgs e)
-        //{
-        //    var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
-        //    if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
-        //    {
-        //        return;
-        //    }
-        //    var filePath = e.Name.Replace('\\', '/');
-        //    var oldFilePath = e.OldName.Replace('\\', '/');
-        //    DeleteFile(oldFilePath, selectedProject, config, socket);
-        //    PushFile(filePath, selectedProject, config, socket);
-        //}
+            var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
+            if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
+            {
+                return;
+            }
+            var filePath = e.Name.Replace('\\', '/');
+            DeleteFile(filePath, selectedProject, config, socket);
+        }
 
-        //private static void FileSystemWatcher_Changed(object sender, FileSystemEventArgs e)
-        //{
-        //    var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
-        //    if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
-        //    {
-        //        return;
-        //    }
-        //    var filePath = e.Name.Replace('\\', '/');
+        private static void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
+        {
+            if (changingFile)
+            {
+                return;
+            }
 
-        //    PushFile(filePath, selectedProject, config, socket);
-        //}
+            var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
+            if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
+            {
+                return;
+            }
+            var filePath = e.Name.Replace('\\', '/');
 
-        private static void DeleteFile(string filePath, Project selectedProject, Config config, ClientWebSocket socket)
+            PushFile(filePath, selectedProject, config, socket);
+        }
+
+        private static void FileSystemWatcher_Renamed(object sender, RenamedEventArgs e)
+        {
+            if (changingFile)
+            {
+                return;
+            }
+
+            var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
+            if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
+            {
+                return;
+            }
+            var filePath = e.Name.Replace('\\', '/');
+            var oldFilePath = e.OldName.Replace('\\', '/');
+            DeleteFile(oldFilePath, selectedProject, config, socket);
+            PushFile(filePath, selectedProject, config, socket);
+        }
+
+        private static void FileSystemWatcher_Changed(object sender, FileSystemEventArgs e)
+        {
+            if (changingFile)
+            {
+                return;
+            }
+
+            var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
+            if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
+            {
+                return;
+            }
+            var filePath = e.Name.Replace('\\', '/');
+
+            PushFile(filePath, selectedProject, config, socket);
+        }
+
+        private static void DeleteFile(string filePath, dynamic selectedProject, Config config, WebsocketClient socket)
         {
             var lockProjectFileRequest = new LockProjectFileRequest
             {
@@ -262,7 +345,7 @@ namespace microStudioCompanion
                 project = selectedProject.id
             };
             Console.WriteLine($" [i] Locking file {filePath} in project {selectedProject.slug}");
-            socket.SendRequest(lockProjectFileRequest);
+            socket.Send(lockProjectFileRequest.Serialize());
 
             var deleteRequest = new DeleteProjectFileRequest
             {
@@ -271,26 +354,30 @@ namespace microStudioCompanion
             };
 
             Console.WriteLine($" [i] Deleting file {filePath} in project {selectedProject.slug}");
-            var deleteResponse = socket.SendAndReceive<DeleteProjectFileRequest, DeleteProjectFileResponse>(deleteRequest);
-            if (deleteResponse.name == "error")
-            {
-                Console.WriteLine($" <!> An error occured: {deleteResponse.error}");
-            }
-            else
-            {
-                Console.WriteLine($" [i] Deleting of file {filePath} completed");
-            }
+            socket.Send(deleteRequest.Serialize());
+            //var deleteResponse = socket.SendAndReceive<DeleteProjectFileRequest, DeleteProjectFileResponse>(deleteRequest);
+            //if (deleteResponse.name == "error")
+            //{
+            //    Console.WriteLine($" <!> An error occured: {deleteResponse.error}");
+            //}
+            //else
+            //{
+            //    Console.WriteLine($" [i] Deleting of file {filePath} completed");
+            //}
         }
 
-        private static void PushFile(string filePath, Project selectedProject, Config config, ClientWebSocket socket)
+        private static void PushFile(string filePath, dynamic selectedProject, Config config, WebsocketClient socket)
         {
+            var slug = (string)selectedProject.slug;
+            var title = (string)selectedProject.title;
+
             var lockProjectFileRequest = new LockProjectFileRequest
             {
                 file = filePath,
-                project = selectedProject.id
+                project = (int)selectedProject.id
             };
-            Console.WriteLine($" [i] Locking file {filePath} in project {selectedProject.slug}");
-            socket.SendRequest(lockProjectFileRequest);
+            Console.WriteLine($" [i] Locking file {filePath} in project {slug}");
+            socket.Send(lockProjectFileRequest.Serialize());
             
             string content;
             try
@@ -299,13 +386,13 @@ namespace microStudioCompanion
             }
             catch (FileNotFoundException)
             {
-                Console.WriteLine($" <i> File {filePath} in project {selectedProject.slug} does not exist");
+                Console.WriteLine($" <!> File {filePath} in project {slug} does not exist");
                 return;
             }
             catch
             {
                 Thread.Sleep(300);
-                content = ReadFileContent(filePath, selectedProject, config);
+                content = ReadFileContent(filePath, title, config);
             }
 
             var writeRequest = new WriteProjectFileRequest
@@ -315,22 +402,23 @@ namespace microStudioCompanion
                 content = content
             };
 
-            Console.WriteLine($" [i] Writing file {filePath} in project {selectedProject.slug}");
-            var writeResponse = socket.SendAndReceive<WriteProjectFileRequest, WriteProjectFileResponse>(writeRequest);
-            if (writeResponse.name == "error")
-            {
-                Console.WriteLine($" <!> An error occured: {writeResponse.error}");
-            }
-            else
-            {
-                Console.WriteLine($" [i] Writing of file {filePath} completed");
-            }
+            Console.WriteLine($" [i] Writing file {filePath} in project {slug}");
+            //var writeResponse = socket.SendAndReceive<WriteProjectFileRequest, WriteProjectFileResponse>(writeRequest);
+            socket.Send(writeRequest.Serialize());
+            //if (writeResponse.name == "error")
+            //{
+            //    Console.WriteLine($" <!> An error occured: {writeResponse.error}");
+            //}
+            //else
+            //{
+            //    Console.WriteLine($" [i] Writing of file {filePath} completed");
+            //}
         }
 
-        private static string ReadFileContent(string filePath, Project selectedProject, Config config)
+        private static string ReadFileContent(string filePath, string projectDirectory, Config config)
         {
             string content;
-            var localFilePath = Path.Combine(config.localDirectory, selectedProject.title, filePath);
+            var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
             var extension = Path.GetExtension(filePath);
             switch (extension)
             {
@@ -347,8 +435,8 @@ namespace microStudioCompanion
 
         private static void PullFiles(string projectSlug, string host, Config config, WebsocketClient socket, WebClient webClient)
         {
-            var projects = GetProjects(socket);
-            Project selectedProject = SelectProject(ref projectSlug, projects);
+            GetProjects(socket);
+            SelectProject(ref projectSlug, projects);
 
             var remoteDirectories = new[] { "ms", "sprites", "maps", "doc" };
             var localDirectoryMapping = new Dictionary<string, string>
@@ -416,10 +504,8 @@ namespace microStudioCompanion
             Console.WriteLine($" [i] Project downloaded to: {Path.Combine(config.localDirectory, selectedProject.title)}");
         }
 
-        private static Project SelectProject(ref string projectSlug, Dictionary<string, Project> projects)
+        private static void SelectProject(ref string projectSlug, Dictionary<string, dynamic> projects)
         {
-            Project selectedProject;
-
             while (true)
             {
                 if (string.IsNullOrWhiteSpace(projectSlug))
@@ -444,11 +530,10 @@ namespace microStudioCompanion
                     projectSlug = null;
                 }
             }
-
-            return selectedProject;
+            changeStep = true;
         }
 
-        private static Dictionary<string, Project> GetProjects(WebsocketClient socket)
+        private static void GetProjects(WebsocketClient socket)
         {
             var getProjectListRequest = new GetProjectListRequest();
             socket.Send(getProjectListRequest.Serialize());
@@ -459,8 +544,6 @@ namespace microStudioCompanion
             //{
             //    projects[element.slug] = element;
             //}
-
-            return projects;
         }
     }
 }

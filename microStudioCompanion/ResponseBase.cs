@@ -18,7 +18,11 @@ namespace microStudioCompanion
         get_language,
         logged_in,
         token_valid,
-        project_list
+        project_list,
+        write_project_file,
+        delete_project_file,
+        project_file_locked,
+        project_file_update,
     }
 
     public enum ResponseErrors
