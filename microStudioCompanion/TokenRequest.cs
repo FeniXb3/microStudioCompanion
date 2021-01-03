@@ -8,6 +8,8 @@ namespace microStudioCompanion
     {
         public string token { get; set; }
 
+        public override string Message => " [<-] [i] Checking token";
+
         public TokenRequest()
         {
             name = "token";

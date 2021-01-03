@@ -10,6 +10,9 @@ namespace microStudioCompanion
         {
             name = "get_project_list";
         }
+
+        public override string Message => " [<-] [i] Getting project list";
+
         public override string Serialize()
         {
             return System.Text.Json.JsonSerializer.Serialize(this);

@@ -18,5 +18,7 @@ namespace microStudioCompanion
         {
             return System.Text.Json.JsonSerializer.Serialize(this);
         }
+
+        public override string Message => $" [<-] [i] Listing project files from folder {folder}";
     }
 }

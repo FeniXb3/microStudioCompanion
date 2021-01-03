@@ -24,6 +24,8 @@ namespace microStudioCompanion
         project_file_locked,
         project_file_update,
         project_file_deleted,
+        list_project_files,
+        read_project_file,
     }
 
     public enum ResponseErrors

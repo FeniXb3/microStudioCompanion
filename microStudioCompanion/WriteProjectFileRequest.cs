@@ -9,7 +9,9 @@ namespace microStudioCompanion
         public int project { get; set; }
         public string file { get; set; }
         public string content { get; set; }
-        
+
+        public override string Message => $" [<-] [i] Writing file {file}";
+
         public WriteProjectFileRequest()
         {
             name = "write_project_file";

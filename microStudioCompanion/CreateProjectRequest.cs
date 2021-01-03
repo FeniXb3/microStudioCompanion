@@ -16,6 +16,8 @@ namespace microStudioCompanion
         {
             return System.Text.Json.JsonSerializer.Serialize(this);
         }
+
+        public override string Message => throw new NotImplementedException();
     }
 
 }

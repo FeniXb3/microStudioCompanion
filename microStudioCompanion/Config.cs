@@ -16,7 +16,7 @@ namespace microStudioCompanion
         internal void Save()
         {
             System.IO.File.WriteAllText(configFilePath, JsonSerializer.Serialize(this));
-            Console.WriteLine($" [i] Login and projects root dir are saved here: {configFilePath}");
+            Console.WriteLine($"      [i] Login and projects root dir are saved here: {configFilePath}");
         }
 
         internal static Config Get()
