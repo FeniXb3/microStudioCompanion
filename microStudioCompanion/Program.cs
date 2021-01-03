@@ -19,12 +19,15 @@ namespace microStudioCompanion
         static WebsocketClient socket;
         static int stepNumber = 0;
         static Dictionary<string, List<Action>> modes;
-        static bool changeStep = false;
+        static bool ChangeStep { get; 
+            set; } = false;
         static string currentMode = "";
         static bool finished = false;
         private static bool changingFile = false;
         static string host = "https://microstudio.dev";
-        static bool shouldDownloadFiles = false;
+        static bool shouldDownloadFiles = true;
+        static List<string> subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
+        static Dictionary<string, bool> subDirHandled = new Dictionary<string, bool>();
 
         static void Main(string[] args)
         {
@@ -35,6 +38,11 @@ namespace microStudioCompanion
             Console.WriteLine("| You can donate me at https://fenix.itch.io/microstudio-companion     |");
             Console.WriteLine(" ----------------------------------------------------------------------");
             Console.WriteLine();
+
+            foreach (var item in subDirectories)
+            {
+                subDirHandled.Add(item, false);
+            }
 
             currentMode = "pull";
             projectSlug = "";
@@ -78,12 +86,12 @@ namespace microStudioCompanion
 
                 while (!finished)
                 {
-                    if (changeStep)
+                    if (ChangeStep)
                     {
                         if (stepNumber + 1 < modes[currentMode].Count)
                         {
                             stepNumber++;
-                            changeStep = false;
+                            ChangeStep = false;
                             modes[currentMode][stepNumber]();
                         }
                     }
@@ -109,14 +117,45 @@ namespace microStudioCompanion
             modes.Add("watch", new List<Action>
             {
                 () => TokenHandler.GetToken(config, socket),
-                () => GetProjects(socket),
+                () => new GetProjectListRequest().SendVia(socket),
                 () => SelectProject(ref projectSlug, projects),
+                //() => {
+                //    new ListProjectFilesRequest
+                //    {
+                //        folder = "ms",
+                //        project = (int)selectedProject.id
+                //    }.SendVia(socket);
+                //},
+                
                 () => {
-                    new ListProjectFilesRequest
+                    if (!Directory.Exists(config.localDirectory))
                     {
-                        folder = "ms",
-                        project = (int)selectedProject.id
-                    }.SendVia(socket);
+                        Console.WriteLine($" <!> Parent directory for your projects ({config.localDirectory}) does not exist.");
+                        config.AskForDirectory();
+                        config.Save();
+                    }
+                    ChangeStep = true;
+                },
+                () => PullFiles(projectSlug, host, config, socket),
+                () =>
+                {
+                    Task.Run( async () => {
+                        await Task.Delay(1000);
+                        int count = -1;
+                        lock(RequestBase.RequestsSent)
+                        {
+                            count = RequestBase.RequestsSent.Count(kvp => !kvp.Value.Handled);
+                        }
+                        while(count > 0)
+                        {
+                            await Task.Delay(1000);
+                            lock(RequestBase.RequestsSent)
+                            {
+                                count = RequestBase.RequestsSent.Count(kvp => !kvp.Value.Handled);
+                            }
+                        }
+                        ChangeStep = true;
+                    });
                 },
                 () => StartWatching(selectedProject)
             });
@@ -124,7 +163,7 @@ namespace microStudioCompanion
             modes.Add("pull", new List<Action>
             {
                 () => TokenHandler.GetToken(config, socket),
-                () => GetProjects(socket),
+                () => new GetProjectListRequest().SendVia(socket),
                 () => SelectProject(ref projectSlug, projects),
                 () => {
                     if (!Directory.Exists(config.localDirectory))
@@ -133,7 +172,7 @@ namespace microStudioCompanion
                         config.AskForDirectory();
                         config.Save();
                     }
-                    changeStep = true;
+                    ChangeStep = true;
                 },
                 () => PullFiles(projectSlug, host, config, socket),
                 () =>
@@ -159,7 +198,7 @@ namespace microStudioCompanion
                         Console.ResetColor();
                         Console.WriteLine();
                     });
-        }
+                }
             });
         }
 
@@ -195,11 +234,11 @@ namespace microStudioCompanion
                         break;
                     case ResponseTypes.logged_in:
                         TokenHandler.SaveToken((string)response.token);
-                        changeStep = true;
+                        ChangeStep = true;
                         break;
                     case ResponseTypes.token_valid:
                         Console.WriteLine(" [->] [i] Token valid");
-                        changeStep = true;
+                        ChangeStep = true;
                         break;
                     case ResponseTypes.project_list:
                         Console.WriteLine($" [->] [i] Received project list");
@@ -208,7 +247,7 @@ namespace microStudioCompanion
                         {
                             projects[(string)element.slug] = element;
                         }
-                        changeStep = true;
+                        ChangeStep = true;
                         break;
                     case ResponseTypes.write_project_file:
                         Console.WriteLine($" [->] [i] Writing of file {RequestBase.GetSentRequest<WriteProjectFileRequest>(requestId).file} completed");
@@ -233,7 +272,12 @@ namespace microStudioCompanion
                         {
                             ReadFiles(RequestBase.GetSentRequest<ListProjectFilesRequest>(requestId).folder, response.files);
                         }
-                        changeStep = true;
+                        subDirHandled[RequestBase.GetSentRequest<ListProjectFilesRequest>(requestId).folder] = true;
+
+                        if (subDirHandled.Count(kvp => !kvp.Value) == 0)
+                        {
+                            ChangeStep = true;
+                        }
                         break;
                     case ResponseTypes.read_project_file:
                         Console.WriteLine($" [->] [i] Reading of remote file {RequestBase.GetSentRequest<ReadProjectFileRequest>(requestId).file} completed");
@@ -352,7 +396,6 @@ namespace microStudioCompanion
         private static void StartWatching(dynamic selectedProject)
         {
             var localProjectPath = Path.Combine(config.localDirectory, (string)selectedProject.title);
-
             FileSystemWatcher fileSystemWatcher = new FileSystemWatcher(localProjectPath)
             {
                 IncludeSubdirectories = true,
@@ -381,7 +424,6 @@ namespace microStudioCompanion
                 return;
             }
 
-            var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
             if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
             {
                 return;
@@ -397,7 +439,6 @@ namespace microStudioCompanion
                 return;
             }
 
-            var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
             if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
             {
                 return;
@@ -414,7 +455,6 @@ namespace microStudioCompanion
                 return;
             }
 
-            var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
             if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
             {
                 return;
@@ -432,7 +472,6 @@ namespace microStudioCompanion
                 return;
             }
 
-            var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
             if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
             {
                 return;
@@ -511,7 +550,6 @@ namespace microStudioCompanion
 
         private static void PullFiles(string projectSlug, string host, Config config, WebsocketClient socket)
         {
-            var remoteDirectories = new[] { "ms", "sprites", "maps", "doc" };
             var localDirectoryMapping = new Dictionary<string, string>
                         {
                             { "ms", "ms" },
@@ -521,7 +559,7 @@ namespace microStudioCompanion
                         };
 
 
-            foreach (var dir in remoteDirectories)
+            foreach (var dir in subDirectories)
             {
                 var name = (string)selectedProject.title;
                 var localDirectoryPath = Path.Combine(config.localDirectory, name, localDirectoryMapping[dir]);
@@ -563,12 +601,7 @@ namespace microStudioCompanion
                     projectSlug = null;
                 }
             }
-            changeStep = true;
-        }
-
-        private static void GetProjects(WebsocketClient socket)
-        {
-            new GetProjectListRequest().SendVia(socket);
+            ChangeStep = true;
         }
     }
 }
