@@ -28,6 +28,9 @@ namespace microStudioCompanion
         static bool shouldDownloadFiles = true;
         static List<string> subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
         static Dictionary<string, bool> subDirHandled = new Dictionary<string, bool>();
+        private static Dictionary<string, FileStream> lockStreams = new Dictionary<string, FileStream>();
+        private static bool isWatching;
+        static FileSystemWatcher fileSystemWatcher;
 
         static void Main(string[] args)
         {
@@ -257,6 +260,7 @@ namespace microStudioCompanion
                         break;
                     case ResponseTypes.project_file_locked:
                         Logger.LogIncomingInfo($"File {(string)response.file} locked remotely by {(string)response.user}");
+                        LockFile((string)response.file);
                         break;
                     case ResponseTypes.project_file_update:
                         Logger.LogIncomingInfo($"File {(string)response.file} updated remotely");
@@ -282,7 +286,6 @@ namespace microStudioCompanion
                     case ResponseTypes.read_project_file:
                         Logger.LogIncomingInfo($"Reading of remote file {RequestBase.GetSentRequest<ReadProjectFileRequest>(requestId).file} completed");
                         UpdateFile((string)RequestBase.GetSentRequest<ReadProjectFileRequest>(requestId).file, (string)response.content);
-                        Console.WriteLine($"      [i] Local file {RequestBase.GetSentRequest<ReadProjectFileRequest>(requestId).file} updated");
                         break;
                     case ResponseTypes.pong:
                         break;
@@ -299,8 +302,19 @@ namespace microStudioCompanion
             }
         }
 
+        private static void LockFile(string filePath)
+        {
+            var projectDirectory = (string)selectedProject.title;
+            var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
+            if (!lockStreams.ContainsKey(filePath))
+            {
+                lockStreams.Add(filePath, new FileStream(localFilePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None));
+            }
+        }
+
         private static void UpdateFile(string filePath, string content)
         {
+            Logger.LogLocalInfo($"Updating local file {filePath} updated to remote content");
             changingFile = true;
 
             var projectDirectory = (string)selectedProject.title;
@@ -323,18 +337,55 @@ namespace microStudioCompanion
                 }
             }
 
+            if (isWatching && !lockStreams.ContainsKey(filePath))
+            {
+                lockStreams.Add(filePath, new FileStream(localFilePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None));
+            }
+
             var extension = Path.GetExtension(filePath);
+            if(fileSystemWatcher != null)
+            {
+                fileSystemWatcher.EnableRaisingEvents = false;
+                Logger.LogLocalInfo($"Wathing disabled while updating file {filePath}");
+            }
+
             switch (extension)
             {
                 case ".png":
-                    System.IO.File.WriteAllBytes(localFilePath, Convert.FromBase64String(content));
+                    if (isWatching)
+                    {
+                        lockStreams[filePath].Write(Convert.FromBase64String(content));
+                    }
+                    else
+                    {
+                        System.IO.File.WriteAllBytes(localFilePath, Convert.FromBase64String(content));
+                    }
                     break;
                 default:
-                    System.IO.File.WriteAllText(localFilePath, content);
+                    if (isWatching)
+                    {
+                        lockStreams[filePath].Write(System.Text.Encoding.UTF8.GetBytes(content));
+                    }
+                    else
+                    {
+                        System.IO.File.WriteAllText(localFilePath, content);
+                    }
                     break;
             }
+            Logger.LogLocalInfo($"Local file {filePath} updated to remote content");
 
             changingFile = false;
+
+            if (lockStreams.ContainsKey(filePath))
+            {
+                lockStreams[filePath].Close();
+                lockStreams.Remove(filePath);
+            }
+            if (fileSystemWatcher != null)
+            {
+                fileSystemWatcher.EnableRaisingEvents = true;
+                Logger.LogLocalInfo($"Wathing enabled after updating file {filePath}");
+            }
         }
         private static void DeleteFile(string filePath)
         {
@@ -396,7 +447,7 @@ namespace microStudioCompanion
         private static void StartWatching(dynamic selectedProject)
         {
             var localProjectPath = Path.Combine(config.localDirectory, (string)selectedProject.title);
-            FileSystemWatcher fileSystemWatcher = new FileSystemWatcher(localProjectPath)
+            fileSystemWatcher = new FileSystemWatcher(localProjectPath)
             {
                 IncludeSubdirectories = true,
                 Filters = { "*.ms", "*.png", "*.json", "*.md" },
@@ -418,12 +469,13 @@ namespace microStudioCompanion
             Console.ForegroundColor = ConsoleColor.Black;
             Logger.LogLocalInfo($"Watching project {(string)selectedProject.title} directory: {localProjectPath}");
             Console.ResetColor();
-            Console.WriteLine();
+            isWatching = true;
         }
 
         private static void FileSystemWatcher_Deleted(object sender, FileSystemEventArgs e)
         {
-            if (changingFile)
+            var filePath = e.Name.Replace('\\', '/');
+            if (lockStreams.ContainsKey(filePath))
             {
                 return;
             }
@@ -432,13 +484,13 @@ namespace microStudioCompanion
             {
                 return;
             }
-            var filePath = e.Name.Replace('\\', '/');
             DeleteRemoteFile(filePath, selectedProject, config, socket);
         }
 
         private static void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
         {
-            if (changingFile)
+            var filePath = e.Name.Replace('\\', '/');
+            if (lockStreams.ContainsKey(filePath))
             {
                 return;
             }
@@ -447,14 +499,15 @@ namespace microStudioCompanion
             {
                 return;
             }
-            var filePath = e.Name.Replace('\\', '/');
 
             PushFile(filePath, selectedProject, config, socket);
         }
 
         private static void FileSystemWatcher_Renamed(object sender, RenamedEventArgs e)
         {
-            if (changingFile)
+            var filePath = e.Name.Replace('\\', '/');
+            var oldFilePath = e.OldName.Replace('\\', '/');
+            if (lockStreams.ContainsKey(filePath))
             {
                 return;
             }
@@ -463,15 +516,14 @@ namespace microStudioCompanion
             {
                 return;
             }
-            var filePath = e.Name.Replace('\\', '/');
-            var oldFilePath = e.OldName.Replace('\\', '/');
             DeleteRemoteFile(oldFilePath, selectedProject, config, socket);
             PushFile(filePath, selectedProject, config, socket);
         }
 
         private static void FileSystemWatcher_Changed(object sender, FileSystemEventArgs e)
         {
-            if (changingFile)
+            var filePath = e.Name.Replace('\\', '/');
+            if (lockStreams.ContainsKey(filePath))
             {
                 return;
             }
@@ -480,7 +532,6 @@ namespace microStudioCompanion
             {
                 return;
             }
-            var filePath = e.Name.Replace('\\', '/');
 
             PushFile(filePath, selectedProject, config, socket);
         }
