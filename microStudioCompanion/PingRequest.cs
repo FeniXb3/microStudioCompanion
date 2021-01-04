@@ -10,5 +10,12 @@ namespace microStudioCompanion
         {
             name = "ping";
         }
+
+        public override string Message => "ping";
+
+        public override string Serialize()
+        {
+            return System.Text.Json.JsonSerializer.Serialize(this);
+        }
     }
 }

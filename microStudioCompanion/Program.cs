@@ -1,21 +1,34 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
-using System.Net.WebSockets;
-using System.Text;
-using System.Text.Json;
 using System.Threading;
-using microStudioCompanion.Extensions;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Websocket.Client;
 
 namespace microStudioCompanion
 {
     class Program
     {
         static string projectSlug;
-        static Project selectedProject;
+        static dynamic selectedProject;
+        static Dictionary<string, dynamic> projects = new Dictionary<string, dynamic>();
         static Config config;
-        static ClientWebSocket socket;
+        static WebsocketClient socket;
+        static int stepNumber = 0;
+        static Dictionary<string, List<Action>> modes;
+        static bool ChangeStep { get; 
+            set; } = false;
+        static string currentMode = "";
+        static bool finished = false;
+        private static bool changingFile = false;
+        static string host = "https://microstudio.dev";
+        static bool shouldDownloadFiles = true;
+        static List<string> subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
+        static Dictionary<string, bool> subDirHandled = new Dictionary<string, bool>();
+
         static void Main(string[] args)
         {
 
@@ -26,12 +39,17 @@ namespace microStudioCompanion
             Console.WriteLine(" ----------------------------------------------------------------------");
             Console.WriteLine();
 
-            var mode = "pull";
+            foreach (var item in subDirectories)
+            {
+                subDirHandled.Add(item, false);
+            }
+
+            currentMode = "pull";
             projectSlug = "";
             string filePath = null;
             if (args.Length > 0)
             {
-                mode = args[0];
+                currentMode = args[0];
                 if (args.Length > 1)
                 {
                     projectSlug = args[1];
@@ -42,38 +60,40 @@ namespace microStudioCompanion
                     filePath = args[2];
                 }
             }
+            PrepareModesSteps();
 
-            var host = "https://microstudio.dev";
             config = Config.Get();
 
 
-            using (socket = new ClientWebSocket())
+            using (socket = new WebsocketClient(new Uri("wss://microstudio.dev")))
             {
-                using (var webClient = new WebClient())
+                socket.MessageReceived.Subscribe(data => HandleResponse(data));
+                Console.WriteLine("      [i] Starting...");
+                socket.Start().Wait();
+                Console.WriteLine("      [i] Started!");
+                Task.Run(() => StartSendingPing(socket));
+                switch (currentMode)
                 {
-                    socket.ConnectAsync(new Uri("wss://microstudio.dev"), CancellationToken.None).Wait();
-                    string token = TokenHandler.GetToken(config, socket);
+                    case "pull":
+                        shouldDownloadFiles = true;
+                        break;
+                    case "watch":
+                        break;
+                }
 
-                    //Console.WriteLine("Token is valid.");
-                    switch (mode)
+                stepNumber = 0;
+                modes[currentMode][stepNumber]();
+
+                while (!finished)
+                {
+                    if (ChangeStep)
                     {
-                        case "pull":
-                            if (!Directory.Exists(config.localDirectory))
-                            {
-                                Console.WriteLine($" <!> Parent directory for your projects ({config.localDirectory}) does not exist.");
-                                config.AskForDirectory();
-                                config.Save();
-                            }
-                            PullFiles(projectSlug, host, config, socket, webClient);
-                            break;
-                        case "push-file":
-                            var projects = GetProjects(socket);
-                            Project selectedProject = SelectProject(ref projectSlug, projects);
-                            PushFile(filePath, selectedProject, config, socket);
-                            break;
-                        case "watch":
-                            WatchProject(projectSlug, config, socket);
-                            break;
+                        if (stepNumber + 1 < modes[currentMode].Count)
+                        {
+                            stepNumber++;
+                            ChangeStep = false;
+                            modes[currentMode][stepNumber]();
+                        }
                     }
                 }
             }
@@ -91,52 +111,338 @@ namespace microStudioCompanion
             }
         }
 
-        private static void WatchProject(string projectSlug, Config config, ClientWebSocket socket)
+        private static void PrepareModesSteps()
         {
-            var projects = GetProjects(socket);
-            selectedProject = SelectProject(ref projectSlug, projects);
-            var localProjectPath = Path.Combine(config.localDirectory, selectedProject.title);
+            modes = new Dictionary<string, List<Action>>();
+            modes.Add("watch", new List<Action>
+            {
+                () => TokenHandler.GetToken(config, socket),
+                () => new GetProjectListRequest().SendVia(socket),
+                () => SelectProject(ref projectSlug, projects),
+                //() => {
+                //    new ListProjectFilesRequest
+                //    {
+                //        folder = "ms",
+                //        project = (int)selectedProject.id
+                //    }.SendVia(socket);
+                //},
+                
+                () => {
+                    if (!Directory.Exists(config.localDirectory))
+                    {
+                        Console.WriteLine($" <!> Parent directory for your projects ({config.localDirectory}) does not exist.");
+                        config.AskForDirectory();
+                        config.Save();
+                    }
+                    ChangeStep = true;
+                },
+                () => PullFiles(projectSlug, host, config, socket),
+                () =>
+                {
+                    Task.Run( async () => {
+                        await Task.Delay(1000);
+                        int count = -1;
+                        lock(RequestBase.RequestsSent)
+                        {
+                            count = RequestBase.RequestsSent.Count(kvp => !kvp.Value.Handled);
+                        }
+                        while(count > 0)
+                        {
+                            await Task.Delay(1000);
+                            lock(RequestBase.RequestsSent)
+                            {
+                                count = RequestBase.RequestsSent.Count(kvp => !kvp.Value.Handled);
+                            }
+                        }
+                        ChangeStep = true;
+                    });
+                },
+                () => StartWatching(selectedProject)
+            });
 
+            modes.Add("pull", new List<Action>
+            {
+                () => TokenHandler.GetToken(config, socket),
+                () => new GetProjectListRequest().SendVia(socket),
+                () => SelectProject(ref projectSlug, projects),
+                () => {
+                    if (!Directory.Exists(config.localDirectory))
+                    {
+                        Console.WriteLine($" <!> Parent directory for your projects ({config.localDirectory}) does not exist.");
+                        config.AskForDirectory();
+                        config.Save();
+                    }
+                    ChangeStep = true;
+                },
+                () => PullFiles(projectSlug, host, config, socket),
+                () =>
+                {
+                    Task.Run( async () => {
+                        int count = -1;
+                        lock(RequestBase.RequestsSent)
+                        {
+                            count = RequestBase.RequestsSent.Count(kvp => !kvp.Value.Handled);
+                        }
+                        while(count > 0)
+                        {
+                            await Task.Delay(1000);
+                            lock(RequestBase.RequestsSent)
+                            {
+                                count = RequestBase.RequestsSent.Count(kvp => !kvp.Value.Handled);
+                            }
+                        }
+                        finished = true;
+                        Console.BackgroundColor = ConsoleColor.Green;
+                        Console.ForegroundColor = ConsoleColor.Black;
+                        Logger.LogLocalInfo($"Project downloaded to: {Path.Combine(config.localDirectory, (string)selectedProject.title)}");
+                        Console.ResetColor();
+                        Console.WriteLine();
+                    });
+                }
+            });
+        }
+
+        private static void ReadFiles(string folder, dynamic files)
+        {
+            foreach (var fileData in files)
+            {
+                new ReadProjectFileRequest
+                {
+                    file = $"{folder}/{fileData.file}",
+                    project = (int)selectedProject.id
+                }.SendVia(socket);
+            }
+        }
+
+        private static void HandleResponse(ResponseMessage data)
+        {
+            var response = JsonConvert.DeserializeObject<dynamic>(data.Text);
+            string responseTypeText = response.name;
+            if (Enum.TryParse(responseTypeText, out ResponseTypes responseType))
+            {
+                var requestId = (response.request_id != null) ? (int)response.request_id : -1;
+                if (requestId != -1)
+                {
+                    RequestBase.GetSentRequest<RequestBase>(requestId).Handled = true;
+                }
+
+                switch (responseType)
+                {
+                    case ResponseTypes.error:
+                        Console.WriteLine($"  ->  <!> Error occured: {response.error}");
+                        HandleError((string)response.error);
+                        break;
+                    case ResponseTypes.logged_in:
+                        TokenHandler.SaveToken((string)response.token);
+                        ChangeStep = true;
+                        break;
+                    case ResponseTypes.token_valid:
+                        Logger.LogIncomingInfo("Token valid");
+                        ChangeStep = true;
+                        break;
+                    case ResponseTypes.project_list:
+                        Logger.LogIncomingInfo($"Received project list");
+                        projects = new Dictionary<string, dynamic>();
+                        foreach (var element in response.list)
+                        {
+                            projects[(string)element.slug] = element;
+                        }
+                        ChangeStep = true;
+                        break;
+                    case ResponseTypes.write_project_file:
+                        Logger.LogIncomingInfo($"Writing of file {RequestBase.GetSentRequest<WriteProjectFileRequest>(requestId).file} completed");
+                        break;
+                    case ResponseTypes.delete_project_file:
+                        Logger.LogIncomingInfo($"Deleting of file {RequestBase.GetSentRequest<DeleteProjectFileRequest>(requestId).file} completed");
+                        break;
+                    case ResponseTypes.project_file_locked:
+                        Logger.LogIncomingInfo($"File {(string)response.file} locked remotely by {(string)response.user}");
+                        break;
+                    case ResponseTypes.project_file_update:
+                        Logger.LogIncomingInfo($"File {(string)response.file} updated remotely");
+                        UpdateFile((string)response.file, (string)response.content);
+                        break;
+                    case ResponseTypes.project_file_deleted:
+                        Logger.LogIncomingInfo($"File {(string)response.file} deleted remotely");
+                        DeleteFile((string)response.file);
+                        break;
+                    case ResponseTypes.list_project_files:
+                        Logger.LogIncomingInfo($"Received files list for directory {RequestBase.GetSentRequest<ListProjectFilesRequest>(requestId).folder}");
+                        if (shouldDownloadFiles)
+                        {
+                            ReadFiles(RequestBase.GetSentRequest<ListProjectFilesRequest>(requestId).folder, response.files);
+                        }
+                        subDirHandled[RequestBase.GetSentRequest<ListProjectFilesRequest>(requestId).folder] = true;
+
+                        if (subDirHandled.Count(kvp => !kvp.Value) == 0)
+                        {
+                            ChangeStep = true;
+                        }
+                        break;
+                    case ResponseTypes.read_project_file:
+                        Logger.LogIncomingInfo($"Reading of remote file {RequestBase.GetSentRequest<ReadProjectFileRequest>(requestId).file} completed");
+                        UpdateFile((string)RequestBase.GetSentRequest<ReadProjectFileRequest>(requestId).file, (string)response.content);
+                        Console.WriteLine($"      [i] Local file {RequestBase.GetSentRequest<ReadProjectFileRequest>(requestId).file} updated");
+                        break;
+                    case ResponseTypes.pong:
+                        break;
+                    default:
+                        Console.WriteLine($"  ->  <!> Unhandled response type: {responseTypeText}");
+                        Console.WriteLine($"  ->  Incomming message: {response}");
+                        break;
+                }
+            }
+            else
+            {
+                Console.WriteLine($"  ->  <!> Unknown response type: {responseTypeText}");
+                Console.WriteLine($"  ->  Incomming message: {response}");
+            }
+        }
+
+        private static void UpdateFile(string filePath, string content)
+        {
+            changingFile = true;
+
+            var projectDirectory = (string)selectedProject.title;
+            var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
+
+            var directoryCreated = false;
+            while (!directoryCreated)
+            {
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(localFilePath));
+                    directoryCreated = true;
+                }
+                catch (UnauthorizedAccessException e)
+                {
+                    Console.WriteLine(e.Message);
+                    config.AskForDirectory();
+                    config.Save();
+                    localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
+                }
+            }
+
+            var extension = Path.GetExtension(filePath);
+            switch (extension)
+            {
+                case ".png":
+                    System.IO.File.WriteAllBytes(localFilePath, Convert.FromBase64String(content));
+                    break;
+                default:
+                    System.IO.File.WriteAllText(localFilePath, content);
+                    break;
+            }
+
+            changingFile = false;
+        }
+        private static void DeleteFile(string filePath)
+        {
+            changingFile = true;
+
+            var projectDirectory = (string)selectedProject.title;
+            var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
+            System.IO.File.Delete(localFilePath);
+
+            changingFile = false;
+        }
+
+        private static void HandleError(string error)
+        {
+            if (Enum.TryParse(error.Replace(' ', '_'), out ResponseErrors errorType))
+            {
+                switch (errorType)
+                {
+                    case ResponseErrors.unknown_user:
+                        Console.WriteLine($"  ->  <!> Login error occured: {error}");
+                        config.AskForNick();
+                        config.Save();
+                        TokenHandler.Login(config, socket);
+                        break;
+                    case ResponseErrors.invalid_token:
+                        Console.WriteLine("  ->  <!> Invalid token");
+                        TokenHandler.Login(config, socket);
+                        break;
+                    case ResponseErrors.not_connected:
+                        TokenHandler.Login(config, socket);
+                        break;
+                    case ResponseErrors.wrong_password:
+                        Console.WriteLine("  ->  <!> Wrong password");
+                        TokenHandler.Login(config, socket);
+                        break;
+                    default:
+                        break;
+                }
+            }
+            else
+            {
+                Console.WriteLine($" <!> Unknown error type: {error}");
+            }
+        }
+
+        private static async Task StartSendingPing(WebsocketClient client)
+        {
+            while (true)
+            {
+                await Task.Delay(30000);
+
+                if (!client.IsRunning)
+                    continue;
+
+                new PingRequest().SendVia(client);
+            }
+        }
+
+        private static void StartWatching(dynamic selectedProject)
+        {
+            var localProjectPath = Path.Combine(config.localDirectory, (string)selectedProject.title);
             FileSystemWatcher fileSystemWatcher = new FileSystemWatcher(localProjectPath)
             {
                 IncludeSubdirectories = true,
                 Filters = { "*.ms", "*.png", "*.json", "*.md" },
                 EnableRaisingEvents = true,
-                NotifyFilter = NotifyFilters.FileName
-                    | NotifyFilters.DirectoryName
-                    | NotifyFilters.Attributes
-                    | NotifyFilters.Size
-                    | NotifyFilters.LastWrite
-                    | NotifyFilters.LastAccess
-                    | NotifyFilters.CreationTime
-                    | NotifyFilters.Security
+                //NotifyFilter = NotifyFilters.FileName
+                //    | NotifyFilters.DirectoryName
+                //    //| NotifyFilters.Attributes
+                //    | NotifyFilters.Size
+                //    //| NotifyFilters.LastWrite
+                //    //| NotifyFilters.LastAccess
+                //    | NotifyFilters.CreationTime
+                //    //| NotifyFilters.Security
             };
             fileSystemWatcher.Changed += FileSystemWatcher_Changed;
             fileSystemWatcher.Renamed += FileSystemWatcher_Renamed;
             fileSystemWatcher.Created += FileSystemWatcher_Created;
             fileSystemWatcher.Deleted += FileSystemWatcher_Deleted;
-
-
-            while (true)
-            {
-
-            }
+            Console.BackgroundColor = ConsoleColor.Green;
+            Console.ForegroundColor = ConsoleColor.Black;
+            Logger.LogLocalInfo($"Watching project {(string)selectedProject.title} directory: {localProjectPath}");
+            Console.ResetColor();
+            Console.WriteLine();
         }
 
         private static void FileSystemWatcher_Deleted(object sender, FileSystemEventArgs e)
         {
-            var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
+            if (changingFile)
+            {
+                return;
+            }
+
             if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
             {
                 return;
             }
             var filePath = e.Name.Replace('\\', '/');
-            DeleteFile(filePath, selectedProject, config, socket);
+            DeleteRemoteFile(filePath, selectedProject, config, socket);
         }
 
         private static void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
         {
-            var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
+            if (changingFile)
+            {
+                return;
+            }
+
             if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
             {
                 return;
@@ -148,20 +454,28 @@ namespace microStudioCompanion
 
         private static void FileSystemWatcher_Renamed(object sender, RenamedEventArgs e)
         {
-            var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
+            if (changingFile)
+            {
+                return;
+            }
+
             if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
             {
                 return;
             }
             var filePath = e.Name.Replace('\\', '/');
             var oldFilePath = e.OldName.Replace('\\', '/');
-            DeleteFile(oldFilePath, selectedProject, config, socket);
+            DeleteRemoteFile(oldFilePath, selectedProject, config, socket);
             PushFile(filePath, selectedProject, config, socket);
         }
 
         private static void FileSystemWatcher_Changed(object sender, FileSystemEventArgs e)
         {
-            var subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
+            if (changingFile)
+            {
+                return;
+            }
+
             if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
             {
                 return;
@@ -171,43 +485,31 @@ namespace microStudioCompanion
             PushFile(filePath, selectedProject, config, socket);
         }
 
-        private static void DeleteFile(string filePath, Project selectedProject, Config config, ClientWebSocket socket)
+        private static void DeleteRemoteFile(string filePath, dynamic selectedProject, Config config, WebsocketClient socket)
         {
-            var lockProjectFileRequest = new LockProjectFileRequest
+            new LockProjectFileRequest
             {
                 file = filePath,
-                project = selectedProject.id
-            };
-            Console.WriteLine($" [i] Locking file {filePath} in project {selectedProject.slug}");
-            socket.SendRequest(lockProjectFileRequest);
+                project = (int)selectedProject.id
+            }.SendVia(socket);
 
-            var deleteRequest = new DeleteProjectFileRequest
+            new DeleteProjectFileRequest
             {
-                project = selectedProject.id,
+                project = (int)selectedProject.id,
                 file = filePath
-            };
-
-            Console.WriteLine($" [i] Deleting file {filePath} in project {selectedProject.slug}");
-            var deleteResponse = socket.SendAndReceive<DeleteProjectFileRequest, DeleteProjectFileResponse>(deleteRequest);
-            if (deleteResponse.name == "error")
-            {
-                Console.WriteLine($" <!> An error occured: {deleteResponse.error}");
-            }
-            else
-            {
-                Console.WriteLine($" [i] Deleting of file {filePath} completed");
-            }
+            }.SendVia(socket);
         }
 
-        private static void PushFile(string filePath, Project selectedProject, Config config, ClientWebSocket socket)
+        private static void PushFile(string filePath, dynamic selectedProject, Config config, WebsocketClient socket)
         {
-            var lockProjectFileRequest = new LockProjectFileRequest
+            var slug = (string)selectedProject.slug;
+            var title = (string)selectedProject.title;
+
+            new LockProjectFileRequest
             {
                 file = filePath,
-                project = selectedProject.id
-            };
-            Console.WriteLine($" [i] Locking file {filePath} in project {selectedProject.slug}");
-            socket.SendRequest(lockProjectFileRequest);
+                project = (int)selectedProject.id
+            }.SendVia(socket);
             
             string content;
             try
@@ -216,38 +518,26 @@ namespace microStudioCompanion
             }
             catch (FileNotFoundException)
             {
-                Console.WriteLine($" <i> File {filePath} in project {selectedProject.slug} does not exist");
+                Console.WriteLine($" <!> File {filePath} in project {slug} does not exist");
                 return;
             }
             catch
             {
                 Thread.Sleep(300);
-                content = ReadFileContent(filePath, selectedProject, config);
+                content = ReadFileContent(filePath, title, config);
             }
-
-            var writeRequest = new WriteProjectFileRequest
+            new WriteProjectFileRequest
             {
                 project = selectedProject.id,
                 file = filePath,
                 content = content
-            };
-
-            Console.WriteLine($" [i] Writing file {filePath} in project {selectedProject.slug}");
-            var writeResponse = socket.SendAndReceive<WriteProjectFileRequest, WriteProjectFileResponse>(writeRequest);
-            if (writeResponse.name == "error")
-            {
-                Console.WriteLine($" <!> An error occured: {writeResponse.error}");
-            }
-            else
-            {
-                Console.WriteLine($" [i] Writing of file {filePath} completed");
-            }
+            }.SendVia(socket);
         }
 
-        private static string ReadFileContent(string filePath, Project selectedProject, Config config)
+        private static string ReadFileContent(string filePath, string projectDirectory, Config config)
         {
             string content;
-            var localFilePath = Path.Combine(config.localDirectory, selectedProject.title, filePath);
+            var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
             var extension = Path.GetExtension(filePath);
             switch (extension)
             {
@@ -262,12 +552,8 @@ namespace microStudioCompanion
             return content;
         }
 
-        private static void PullFiles(string projectSlug, string host, Config config, ClientWebSocket socket, WebClient webClient)
+        private static void PullFiles(string projectSlug, string host, Config config, WebsocketClient socket)
         {
-            var projects = GetProjects(socket);
-            Project selectedProject = SelectProject(ref projectSlug, projects);
-
-            var remoteDirectories = new[] { "ms", "sprites", "maps", "doc" };
             var localDirectoryMapping = new Dictionary<string, string>
                         {
                             { "ms", "ms" },
@@ -276,71 +562,30 @@ namespace microStudioCompanion
                             { "doc", "doc" }
                         };
 
-            foreach (var dir in remoteDirectories)
-            {
-                var listProjectFilesRequest = new ListProjectFilesRequest
-                {
-                    folder = dir,
-                    project = selectedProject.id
-                };
 
-                var nick = selectedProject.owner.nick;
-                var slug = selectedProject.slug;
-                var code = selectedProject.code;
-                var name = selectedProject.title;
+            foreach (var dir in subDirectories)
+            {
+                var name = (string)selectedProject.title;
                 var localDirectoryPath = Path.Combine(config.localDirectory, name, localDirectoryMapping[dir]);
                 if (Directory.Exists(localDirectoryPath))
                 {
                     Directory.Delete(localDirectoryPath, true);
                 }
-
-
-
-                var listProjectFilesResponse = socket.SendAndReceive<ListProjectFilesRequest, ListProjectFilesResponse>(listProjectFilesRequest);
-                if (listProjectFilesResponse.files.Length == 0)
+                new ListProjectFilesRequest
                 {
-                    continue;
-                }
-
-                var directoryCreated = false;
-                while (!directoryCreated)
-                {
-                    try
-                    {
-                        Directory.CreateDirectory(localDirectoryPath);
-                        directoryCreated = true;
-                    }
-                    catch (UnauthorizedAccessException e)
-                    {
-                        Console.WriteLine(e.Message);
-                        config.AskForDirectory();
-                        config.Save();
-                        localDirectoryPath = Path.Combine(config.localDirectory, name, localDirectoryMapping[dir]);
-                    }
-                }
-
-                int index = 0;
-                int amount = listProjectFilesResponse.files.Length;
-                foreach (var file in listProjectFilesResponse.files)
-                {
-                    var onlineFilePath = $"{host}/{nick}/{slug}/{code}/{dir}/{file.file}";
-                    var localFilePath = Path.Combine(localDirectoryPath, file.file);
-                    Console.WriteLine($" [i] Downloading ({++index}/{amount}) file from \"{dir}\" directory: {file.file}");
-                    webClient.DownloadFile(onlineFilePath, localFilePath);
-                }
+                    folder = dir,
+                    project = (int)selectedProject.id
+                }.SendVia(socket);
             }
-            Console.WriteLine($" [i] Project downloaded to: {Path.Combine(config.localDirectory, selectedProject.title)}");
         }
 
-        private static Project SelectProject(ref string projectSlug, Dictionary<string, Project> projects)
+        private static void SelectProject(ref string projectSlug, Dictionary<string, dynamic> projects)
         {
-            Project selectedProject;
-
             while (true)
             {
                 if (string.IsNullOrWhiteSpace(projectSlug))
                 {
-                    Console.Write(" (?) Project slug to backup (leave empty to see available projects): ");
+                    Console.Write("      (?) Project slug to backup (leave empty to see available projects): ");
                     projectSlug = Console.ReadLine();
                 }
 
@@ -360,21 +605,7 @@ namespace microStudioCompanion
                     projectSlug = null;
                 }
             }
-
-            return selectedProject;
-        }
-
-        private static Dictionary<string, Project> GetProjects(ClientWebSocket socket)
-        {
-            var getProjectListRequest = new GetProjectListRequest();
-            var getProjectListResponse = socket.SendAndReceive<GetProjectListRequest, GetProjectListResponse>(getProjectListRequest);
-            var projects = new Dictionary<string, Project>();
-            foreach (var element in getProjectListResponse.list)
-            {
-                projects[element.slug] = element;
-            }
-
-            return projects;
+            ChangeStep = true;
         }
     }
 }

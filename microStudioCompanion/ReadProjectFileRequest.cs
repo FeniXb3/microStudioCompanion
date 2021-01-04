@@ -13,6 +13,13 @@ namespace microStudioCompanion
         {
             name = "read_project_file";
         }
+
+        public override string Serialize()
+        {
+            return System.Text.Json.JsonSerializer.Serialize(this);
+        }
+
+        public override string Message => $"Reading file {file}";
     }
 
 }

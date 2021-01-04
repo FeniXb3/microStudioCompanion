@@ -13,5 +13,11 @@ namespace microStudioCompanion
         {
             name = "delete_project_file";
         }
+        public override string Serialize()
+        {
+            return System.Text.Json.JsonSerializer.Serialize(this);
+        }
+
+        public override string Message => $"Deleting file {file}";
     }
 }

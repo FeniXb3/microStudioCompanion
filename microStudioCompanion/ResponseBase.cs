@@ -11,8 +11,28 @@ namespace microStudioCompanion
         public string error { get; set; }
     }
 
-    public class ResponseErrors
+    public enum ResponseTypes
     {
-        public static string unknown_user = "unknown user";
+        error,
+        pong,
+        get_language,
+        logged_in,
+        token_valid,
+        project_list,
+        write_project_file,
+        delete_project_file,
+        project_file_locked,
+        project_file_update,
+        project_file_deleted,
+        list_project_files,
+        read_project_file,
+    }
+
+    public enum ResponseErrors
+    {
+        unknown_user,
+        invalid_token,
+        not_connected,
+        wrong_password
     }
 }
