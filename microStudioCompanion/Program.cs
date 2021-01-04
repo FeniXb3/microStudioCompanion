@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
@@ -31,6 +33,7 @@ namespace microStudioCompanion
         private static Dictionary<string, FileStream> lockStreams = new Dictionary<string, FileStream>();
         private static bool isWatching;
         static FileSystemWatcher fileSystemWatcher;
+        static Dictionary<string, List<string>> changeHistory = new Dictionary<string, List<string>>();
 
         static void Main(string[] args)
         {
@@ -343,12 +346,17 @@ namespace microStudioCompanion
             }
 
             var extension = Path.GetExtension(filePath);
-            if(fileSystemWatcher != null)
-            {
-                fileSystemWatcher.EnableRaisingEvents = false;
-                Logger.LogLocalInfo($"Wathing disabled while updating file {filePath}");
-            }
+            //if(fileSystemWatcher != null)
+            //{
+            //    fileSystemWatcher.EnableRaisingEvents = false;
+            //    Logger.LogLocalInfo($"Wathing disabled while updating file {filePath}");
+            //}
 
+            if (!changeHistory.ContainsKey(filePath))
+            {
+                changeHistory.Add(filePath, new List<string>());
+            }
+            changeHistory[filePath].Add(content);
             switch (extension)
             {
                 case ".png":
@@ -380,12 +388,13 @@ namespace microStudioCompanion
             {
                 lockStreams[filePath].Close();
                 lockStreams.Remove(filePath);
+                Logger.LogLocalInfo($"Unlocked local file {filePath}");
             }
-            if (fileSystemWatcher != null)
-            {
-                fileSystemWatcher.EnableRaisingEvents = true;
-                Logger.LogLocalInfo($"Wathing enabled after updating file {filePath}");
-            }
+            //if (fileSystemWatcher != null)
+            //{
+            //    fileSystemWatcher.EnableRaisingEvents = true;
+            //    Logger.LogLocalInfo($"Wathing enabled after updating file {filePath}");
+            //}
         }
         private static void DeleteFile(string filePath)
         {
@@ -422,6 +431,7 @@ namespace microStudioCompanion
                         TokenHandler.Login(config, socket);
                         break;
                     default:
+                        Console.WriteLine($"  ->  <!> Unhanled error: {error}");
                         break;
                 }
             }
@@ -484,51 +494,119 @@ namespace microStudioCompanion
             {
                 return;
             }
+
+            if (changeHistory.ContainsKey(filePath))
+            {
+                changeHistory.Remove(filePath);
+            }
             DeleteRemoteFile(filePath, selectedProject, config, socket);
         }
 
         private static void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
         {
             var filePath = e.Name.Replace('\\', '/');
-            if (lockStreams.ContainsKey(filePath))
+            if (!ShouldPerformFileChange(filePath))
             {
                 return;
             }
 
-            if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
+            if (RenameIfNeeded(filePath, e.FullPath))
             {
                 return;
             }
 
             PushFile(filePath, selectedProject, config, socket);
+        }
+
+        private static bool RenameIfNeeded(string filePath, string fullPath)
+        {
+            var newStringBuilder = new StringBuilder();
+            newStringBuilder.Append(filePath.Normalize(NormalizationForm.FormKD)
+                                            .Where(x => x < 128)
+                                            .ToArray());
+
+            var clearedPath = Regex.Replace(newStringBuilder.ToString(), @"[^\w\d_/\.]", "").ToLower();
+            if (filePath != clearedPath)
+            {
+                var newFullPath = Path.Combine(Path.GetDirectoryName(fullPath), Path.GetFileName(clearedPath));
+                Task.Run(async () => {
+                    await Task.Delay(1000);
+                    System.IO.File.Move(fullPath, newFullPath);
+                });
+                return true;
+            }
+
+            return false;
         }
 
         private static void FileSystemWatcher_Renamed(object sender, RenamedEventArgs e)
         {
             var filePath = e.Name.Replace('\\', '/');
             var oldFilePath = e.OldName.Replace('\\', '/');
-            if (lockStreams.ContainsKey(filePath))
+            if (!ShouldPerformFileChange(filePath))
             {
                 return;
             }
 
-            if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
+            if (changeHistory.ContainsKey(oldFilePath))
             {
+                changeHistory.Remove(oldFilePath);
+            }
+
+            if(RenameIfNeeded(filePath, e.FullPath))
+            { 
                 return;
             }
+
             DeleteRemoteFile(oldFilePath, selectedProject, config, socket);
             PushFile(filePath, selectedProject, config, socket);
+        }
+
+        private static bool ShouldPerformFileChange(string filePath)
+        {
+            var projectDirectory = (string)selectedProject.title;
+            if (!System.IO.File.Exists(Path.Combine(config.localDirectory, projectDirectory, filePath)))
+            {
+                return false;
+            }
+
+            if (!changeHistory.ContainsKey(filePath))
+            {
+                changeHistory.Add(filePath, new List<string>());
+            }
+            Thread.Sleep(1000);
+            var content = ReadFileContent(filePath, projectDirectory, config);
+            var fileHistory = changeHistory[filePath];
+
+            if (fileHistory.Count > 0)
+            {
+                var lastContent = fileHistory.Last();
+
+                if (content == lastContent || content == null)
+                {
+                    return false;
+                }
+            }
+
+            if (lockStreams.ContainsKey(filePath))
+            {
+                return false;
+            }
+
+            if (!subDirectories.Contains(Path.GetDirectoryName(filePath)))
+            {
+                return false;
+            }
+
+            fileHistory.Add(content);
+
+            return true;
         }
 
         private static void FileSystemWatcher_Changed(object sender, FileSystemEventArgs e)
         {
             var filePath = e.Name.Replace('\\', '/');
-            if (lockStreams.ContainsKey(filePath))
-            {
-                return;
-            }
-
-            if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
+            if (!ShouldPerformFileChange(filePath))
             {
                 return;
             }
@@ -589,6 +667,11 @@ namespace microStudioCompanion
         {
             string content;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
+            if (!System.IO.File.Exists(localFilePath))
+            {
+                return null;
+            }
+
             var extension = Path.GetExtension(filePath);
             switch (extension)
             {
