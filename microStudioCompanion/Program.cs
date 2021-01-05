@@ -224,7 +224,7 @@ namespace microStudioCompanion
             string responseTypeText = response.name;
             if (Enum.TryParse(responseTypeText, out ResponseTypes responseType))
             {
-                var requestId = (response.request_id != null) ? (int)response.request_id : -1;
+                int requestId = response.request_id ?? -1;
                 if (requestId != -1)
                 {
                     RequestBase.GetSentRequest<RequestBase>(requestId).Handled = true;
