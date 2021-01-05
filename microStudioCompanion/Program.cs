@@ -35,7 +35,6 @@ namespace microStudioCompanion
 
         static void Main(string[] args)
         {
-
             Console.WriteLine(" ----------------------------------------------------------------------");
             Console.WriteLine("| Welcome to microStudio Companion! Let's backup your game! :)         |");
             Console.WriteLine("| If you want to contact me, write me an email: konrad@makegames.today |");
@@ -117,7 +116,28 @@ namespace microStudioCompanion
         private static void PrepareModesSteps()
         {
             modes = new Dictionary<string, List<Action>>();
-            modes.Add("watch", new List<Action>
+            List<Action> commonSteps = GetCommonSteps();
+
+            var watchSteps = commonSteps.ToList();
+            watchSteps.Add(() => StartWatching(selectedProject));
+            modes.Add("watch", watchSteps);
+
+            var pullSteps = commonSteps.ToList();
+            pullSteps.Add(() => FinishPulling());
+            modes.Add("pull", pullSteps);
+        }
+
+        private static void FinishPulling()
+        {
+            finished = true;
+            var message = $"Project downloaded to: {Path.Combine(config.localDirectory, (string)selectedProject.title)}";
+            Logger.LogLocalInfo(message, ConsoleColor.Black, ConsoleColor.DarkGreen);
+            Console.WriteLine();
+        }
+
+        private static List<Action> GetCommonSteps()
+        {
+            return new List<Action>
             {
                 () => TokenHandler.GetToken(config, socket),
                 () => new GetProjectListRequest().SendVia(socket),
@@ -152,47 +172,8 @@ namespace microStudioCompanion
                         ChangeStep = true;
                     });
                 },
-                () => StartWatching(selectedProject)
-            });
 
-            modes.Add("pull", new List<Action>
-            {
-                () => TokenHandler.GetToken(config, socket),
-                () => new GetProjectListRequest().SendVia(socket),
-                () => SelectProject(ref projectSlug, projects),
-                () => {
-                    if (!Directory.Exists(config.localDirectory))
-                    {
-                        Logger.LogLocalError($"Parent directory for your projects ({config.localDirectory}) does not exist.");
-                        config.AskForDirectory();
-                        config.Save();
-                    }
-                    ChangeStep = true;
-                },
-                () => PullFiles(config, socket),
-                () =>
-                {
-                    Task.Run( async () => {
-                        int count = -1;
-                        lock(RequestBase.RequestsSent)
-                        {
-                            count = RequestBase.RequestsSent.Count(kvp => !kvp.Value.Handled);
-                        }
-                        while(count > 0)
-                        {
-                            await Task.Delay(1000);
-                            lock(RequestBase.RequestsSent)
-                            {
-                                count = RequestBase.RequestsSent.Count(kvp => !kvp.Value.Handled);
-                            }
-                        }
-                        finished = true;
-                        var message = $"Project downloaded to: {Path.Combine(config.localDirectory, (string)selectedProject.title)}";
-                        Logger.LogLocalInfo(message, ConsoleColor.Black, ConsoleColor.DarkGreen);
-                        Console.WriteLine();
-                    });
-                }
-            });
+            };
         }
 
         private static void ReadFiles(string folder, dynamic files)
