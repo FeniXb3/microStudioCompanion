@@ -306,7 +306,7 @@ namespace microStudioCompanion
         {
             var projectDirectory = (string)selectedProject.title;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
-            if (!lockStreams.ContainsKey(filePath))
+            if (!lockStreams.ContainsKey(filePath) && System.IO.File.Exists(localFilePath))
             {
                 lockStreams.Add(filePath, new FileStream(localFilePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None));
             }
@@ -337,7 +337,7 @@ namespace microStudioCompanion
                 }
             }
 
-            if (isWatching && !lockStreams.ContainsKey(filePath))
+            if (isWatching && !lockStreams.ContainsKey(filePath) && System.IO.File.Exists(localFilePath))
             {
                 lockStreams.Add(filePath, new FileStream(localFilePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None));
             }
@@ -357,7 +357,7 @@ namespace microStudioCompanion
             switch (extension)
             {
                 case ".png":
-                    if (isWatching)
+                    if (isWatching && lockStreams.ContainsKey(filePath))
                     {
                         lockStreams[filePath].Write(Convert.FromBase64String(content));
                     }
@@ -367,7 +367,7 @@ namespace microStudioCompanion
                     }
                     break;
                 default:
-                    if (isWatching)
+                    if (isWatching && lockStreams.ContainsKey(filePath))
                     {
                         lockStreams[filePath].Write(System.Text.Encoding.UTF8.GetBytes(content));
                     }
@@ -399,6 +399,13 @@ namespace microStudioCompanion
 
             var projectDirectory = (string)selectedProject.title;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
+            if(lockStreams.ContainsKey(filePath))
+            {
+                lockStreams[filePath].Close();
+                lockStreams.Remove(filePath);
+                Logger.LogLocalInfo($"Unlocked local file {filePath}");
+            }
+
             System.IO.File.Delete(localFilePath);
             Logger.LogLocalInfo($"Removed local file {filePath}");
 
