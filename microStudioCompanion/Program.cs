@@ -31,7 +31,7 @@ namespace microStudioCompanion
         private static Dictionary<string, FileStream> lockStreams = new Dictionary<string, FileStream>();
         private static bool isWatching;
         static FileSystemWatcher fileSystemWatcher;
-        static Dictionary<string, (string content, bool fromRemote)> changeHistory = new Dictionary<string, (string content, bool fromRemote)>();
+        static Dictionary<string, string> changeHistory = new Dictionary<string, string>();
 
         static void Main(string[] args)
         {
@@ -312,7 +312,7 @@ namespace microStudioCompanion
                 lockStreams.Add(filePath, new FileStream(localFilePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None));
             }
 
-            changeHistory[filePath] = (content, true);
+            changeHistory[filePath] = content;
             var extension = Path.GetExtension(filePath);
             switch (extension)
             {
@@ -515,32 +515,33 @@ namespace microStudioCompanion
             {
                 return false;
             }
+            bool result = true;
 
             Thread.Sleep(1000);
             var content = ReadFileContent(filePath, projectDirectory, config);
 
             if (changeHistory.ContainsKey(filePath))
             {
-                var (lastContent, fromRemote) = changeHistory[filePath];
-
-                if (fromRemote || content == lastContent || content == null)
+                var lastContent = changeHistory[filePath];
+                
+                if (content == lastContent || content == null)
                 {
-                    return false;
+                    result = false;
                 }
             }
 
             if (lockStreams.ContainsKey(filePath))
             {
-                return false;
+                result = false;
             }
 
             if (!subDirectories.Contains(Path.GetDirectoryName(filePath)))
             {
-                return false;
+                result = false;
             }
-            changeHistory[filePath] = (content, false);
+            changeHistory[filePath] = content;
 
-            return true;
+            return result;
         }
 
         private static void FileSystemWatcher_Changed(object sender, FileSystemEventArgs e)
