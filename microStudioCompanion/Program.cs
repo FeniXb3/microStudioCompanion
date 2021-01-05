@@ -25,8 +25,6 @@ namespace microStudioCompanion
             set; } = false;
         static string currentMode = "";
         static bool finished = false;
-        private static bool changingFile = false;
-        static string host = "https://microstudio.dev";
         static bool shouldDownloadFiles = true;
         static List<string> subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
         static Dictionary<string, bool> subDirHandled = new Dictionary<string, bool>();
@@ -69,7 +67,6 @@ namespace microStudioCompanion
             PrepareModesSteps();
 
             config = Config.Get();
-
 
             using (socket = new WebsocketClient(new Uri("wss://microstudio.dev")))
             {
@@ -125,14 +122,6 @@ namespace microStudioCompanion
                 () => TokenHandler.GetToken(config, socket),
                 () => new GetProjectListRequest().SendVia(socket),
                 () => SelectProject(ref projectSlug, projects),
-                //() => {
-                //    new ListProjectFilesRequest
-                //    {
-                //        folder = "ms",
-                //        project = (int)selectedProject.id
-                //    }.SendVia(socket);
-                //},
-                
                 () => {
                     if (!Directory.Exists(config.localDirectory))
                     {
@@ -142,7 +131,7 @@ namespace microStudioCompanion
                     }
                     ChangeStep = true;
                 },
-                () => PullFiles(projectSlug, host, config, socket),
+                () => PullFiles(config, socket),
                 () =>
                 {
                     Task.Run( async () => {
@@ -180,7 +169,7 @@ namespace microStudioCompanion
                     }
                     ChangeStep = true;
                 },
-                () => PullFiles(projectSlug, host, config, socket),
+                () => PullFiles(config, socket),
                 () =>
                 {
                     Task.Run( async () => {
@@ -224,6 +213,7 @@ namespace microStudioCompanion
             string responseTypeText = response.name;
             if (Enum.TryParse(responseTypeText, out ResponseTypes responseType))
             {
+                string tmp = response.name;
                 int requestId = response.request_id ?? -1;
                 if (requestId != -1)
                 {
@@ -315,7 +305,6 @@ namespace microStudioCompanion
         private static void UpdateFile(string filePath, string content)
         {
             Logger.LogLocalInfo($"Updating local file {filePath} updated to remote content");
-            changingFile = true;
 
             var projectDirectory = (string)selectedProject.title;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
@@ -342,15 +331,8 @@ namespace microStudioCompanion
                 lockStreams.Add(filePath, new FileStream(localFilePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None));
             }
 
-            var extension = Path.GetExtension(filePath);
-            //if(fileSystemWatcher != null)
-            //{
-            //    fileSystemWatcher.EnableRaisingEvents = false;
-            //    Logger.LogLocalInfo($"Wathing disabled while updating file {filePath}");
-            //}
             changeHistory[filePath] = (content, true);
-
-
+            var extension = Path.GetExtension(filePath);
             switch (extension)
             {
                 case ".png":
@@ -376,24 +358,15 @@ namespace microStudioCompanion
             }
             Logger.LogLocalInfo($"Local file {filePath} updated to remote content");
 
-            changingFile = false;
-
             if (lockStreams.ContainsKey(filePath))
             {
                 lockStreams[filePath].Close();
                 lockStreams.Remove(filePath);
                 Logger.LogLocalInfo($"Unlocked local file {filePath}");
             }
-            //if (fileSystemWatcher != null)
-            //{
-            //    fileSystemWatcher.EnableRaisingEvents = true;
-            //    Logger.LogLocalInfo($"Wathing enabled after updating file {filePath}");
-            //}
         }
         private static void DeleteFile(string filePath)
         {
-            changingFile = true;
-
             var projectDirectory = (string)selectedProject.title;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
             if(lockStreams.ContainsKey(filePath))
@@ -405,8 +378,6 @@ namespace microStudioCompanion
 
             System.IO.File.Delete(localFilePath);
             Logger.LogLocalInfo($"Removed local file {filePath}");
-
-            changingFile = false;
         }
 
         private static void HandleError(string error)
@@ -464,15 +435,7 @@ namespace microStudioCompanion
             {
                 IncludeSubdirectories = true,
                 Filters = { "*.ms", "*.png", "*.json", "*.md" },
-                EnableRaisingEvents = true,
-                //NotifyFilter = NotifyFilters.FileName
-                //    | NotifyFilters.DirectoryName
-                //    //| NotifyFilters.Attributes
-                //    | NotifyFilters.Size
-                //    //| NotifyFilters.LastWrite
-                //    //| NotifyFilters.LastAccess
-                //    | NotifyFilters.CreationTime
-                //    //| NotifyFilters.Security
+                EnableRaisingEvents = true
             };
             fileSystemWatcher.Changed += FileSystemWatcher_Changed;
             fileSystemWatcher.Renamed += FileSystemWatcher_Renamed;
@@ -682,7 +645,7 @@ namespace microStudioCompanion
             return content;
         }
 
-        private static void PullFiles(string projectSlug, string host, Config config, WebsocketClient socket)
+        private static void PullFiles(Config config, WebsocketClient socket)
         {
             var localDirectoryMapping = new Dictionary<string, string>
                         {
