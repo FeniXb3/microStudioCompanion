@@ -22,7 +22,7 @@ namespace microStudioCompanion
 
         public static void Login(Config config, WebsocketClient socket)
         {
-            Console.Write("      (?) Your microStudio password: ");
+            Logger.LogLocalQuery("Your microStudio password: ");
             var password = Console.ReadLine();
             new LoginRequest
             {
@@ -34,7 +34,7 @@ namespace microStudioCompanion
         public static void SaveToken(string token)
         {
             System.IO.File.WriteAllText(tokenInfoFilePath, token);
-            Console.WriteLine($"      [i] Token saved IN PLAIN TEXT, READABLE BY ANYONE, here: {tokenInfoFilePath}");
+            Logger.LogLocalInfo($"Token saved IN PLAIN TEXT, READABLE BY ANYONE, here: {tokenInfoFilePath}");
         }
 
         private static void GetSavedToken(WebsocketClient socket)
@@ -48,7 +48,7 @@ namespace microStudioCompanion
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
+                Logger.LogLocalError(e.Message);
             }
         }
     }

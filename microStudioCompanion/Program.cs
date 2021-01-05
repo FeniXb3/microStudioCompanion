@@ -74,9 +74,9 @@ namespace microStudioCompanion
             using (socket = new WebsocketClient(new Uri("wss://microstudio.dev")))
             {
                 socket.MessageReceived.Subscribe(data => HandleResponse(data));
-                Console.WriteLine("      [i] Starting...");
+                Logger.LogLocalInfo("Starting...");
                 socket.Start().Wait();
-                Console.WriteLine("      [i] Started!");
+                Logger.LogLocalInfo("Started!");
                 Task.Run(() => StartSendingPing(socket));
                 switch (currentMode)
                 {
@@ -136,7 +136,7 @@ namespace microStudioCompanion
                 () => {
                     if (!Directory.Exists(config.localDirectory))
                     {
-                        Console.WriteLine($" <!> Parent directory for your projects ({config.localDirectory}) does not exist.");
+                        Logger.LogLocalError($"Parent directory for your projects ({config.localDirectory}) does not exist.");
                         config.AskForDirectory();
                         config.Save();
                     }
@@ -174,7 +174,7 @@ namespace microStudioCompanion
                 () => {
                     if (!Directory.Exists(config.localDirectory))
                     {
-                        Console.WriteLine($" <!> Parent directory for your projects ({config.localDirectory}) does not exist.");
+                        Logger.LogLocalError($"Parent directory for your projects ({config.localDirectory}) does not exist.");
                         config.AskForDirectory();
                         config.Save();
                     }
@@ -198,10 +198,8 @@ namespace microStudioCompanion
                             }
                         }
                         finished = true;
-                        Console.BackgroundColor = ConsoleColor.Green;
-                        Console.ForegroundColor = ConsoleColor.Black;
-                        Logger.LogLocalInfo($"Project downloaded to: {Path.Combine(config.localDirectory, (string)selectedProject.title)}");
-                        Console.ResetColor();
+                        var message = $"Project downloaded to: {Path.Combine(config.localDirectory, (string)selectedProject.title)}";
+                        Logger.LogLocalInfo(message, ConsoleColor.Black, ConsoleColor.DarkGreen);
                         Console.WriteLine();
                     });
                 }
@@ -235,7 +233,6 @@ namespace microStudioCompanion
                 switch (responseType)
                 {
                     case ResponseTypes.error:
-                        Console.WriteLine($"  ->  <!> Error occured: {response.error}");
                         HandleError((string)response.error);
                         break;
                     case ResponseTypes.logged_in:
@@ -293,15 +290,15 @@ namespace microStudioCompanion
                     case ResponseTypes.pong:
                         break;
                     default:
-                        Console.WriteLine($"  ->  <!> Unhandled response type: {responseTypeText}");
-                        Console.WriteLine($"  ->  Incomming message: {response}");
+                        Logger.LogLocalError($"Unhandled response type: {responseTypeText}");
+                        Logger.LogIncomingInfo($"Incomming message: {response}");
                         break;
                 }
             }
             else
             {
-                Console.WriteLine($"  ->  <!> Unknown response type: {responseTypeText}");
-                Console.WriteLine($"  ->  Incomming message: {response}");
+                Logger.LogLocalError($"Unknown response type: {responseTypeText}");
+                Logger.LogIncomingInfo($"Incomming message: {response}");
             }
         }
 
@@ -333,7 +330,7 @@ namespace microStudioCompanion
                 }
                 catch (UnauthorizedAccessException e)
                 {
-                    Console.WriteLine(e.Message);
+                    Logger.LogLocalError(e.Message);
                     config.AskForDirectory();
                     config.Save();
                     localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
@@ -403,6 +400,7 @@ namespace microStudioCompanion
             var projectDirectory = (string)selectedProject.title;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
             System.IO.File.Delete(localFilePath);
+            Logger.LogLocalInfo($"Removed local file {filePath}");
 
             changingFile = false;
         }
@@ -414,30 +412,31 @@ namespace microStudioCompanion
                 switch (errorType)
                 {
                     case ResponseErrors.unknown_user:
-                        Console.WriteLine($"  ->  <!> Login error occured: {error}");
+                        Logger.LogIncomingError($"Login error occured: {error}");
                         config.AskForNick();
                         config.Save();
                         TokenHandler.Login(config, socket);
                         break;
                     case ResponseErrors.invalid_token:
-                        Console.WriteLine("  ->  <!> Invalid token");
+                        Logger.LogIncomingError($"Invalid token");
                         TokenHandler.Login(config, socket);
                         break;
                     case ResponseErrors.not_connected:
+                        Logger.LogIncomingError($"Not connected");
                         TokenHandler.Login(config, socket);
                         break;
                     case ResponseErrors.wrong_password:
-                        Console.WriteLine("  ->  <!> Wrong password");
+                        Logger.LogIncomingError($"Wrong password");
                         TokenHandler.Login(config, socket);
                         break;
                     default:
-                        Console.WriteLine($"  ->  <!> Unhanled error: {error}");
+                        Logger.LogIncomingError($"Unhandled error: {error}");
                         break;
                 }
             }
             else
             {
-                Console.WriteLine($" <!> Unknown error type: {error}");
+                Logger.LogIncomingError($"Unknown error type: {error}");
             }
         }
 
@@ -475,10 +474,8 @@ namespace microStudioCompanion
             fileSystemWatcher.Renamed += FileSystemWatcher_Renamed;
             fileSystemWatcher.Created += FileSystemWatcher_Created;
             fileSystemWatcher.Deleted += FileSystemWatcher_Deleted;
-            Console.BackgroundColor = ConsoleColor.Green;
-            Console.ForegroundColor = ConsoleColor.Black;
-            Logger.LogLocalInfo($"Watching project {(string)selectedProject.title} directory: {localProjectPath}");
-            Console.ResetColor();
+            var message = $"Watching project {(string)selectedProject.title} directory: {localProjectPath}";
+            Logger.LogLocalInfo(message, ConsoleColor.Black, ConsoleColor.DarkGreen);
             isWatching = true;
         }
 
@@ -647,7 +644,7 @@ namespace microStudioCompanion
             }
             catch (FileNotFoundException)
             {
-                Console.WriteLine($" <!> File {filePath} in project {slug} does not exist");
+                Logger.LogLocalError($"File {filePath} in project {slug} does not exist");
                 return;
             }
             catch
@@ -719,7 +716,7 @@ namespace microStudioCompanion
             {
                 if (string.IsNullOrWhiteSpace(projectSlug))
                 {
-                    Console.Write("      (?) Project slug to backup (leave empty to see available projects): ");
+                    Logger.LogLocalQuery("Project slug to backup (leave empty to see available projects): ");
                     projectSlug = Console.ReadLine();
                 }
 
@@ -730,7 +727,7 @@ namespace microStudioCompanion
                 }
                 else
                 {
-                    Console.WriteLine($" <!> Pick project slug from the list: (Press any key to continue)");
+                    Logger.LogLocalError($"Pick project slug from the list: (Press any key to continue)");
                     Console.ReadKey(true);
                     foreach (var proj in projects.Values)
                     {
