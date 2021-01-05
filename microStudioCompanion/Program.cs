@@ -33,7 +33,7 @@ namespace microStudioCompanion
         private static Dictionary<string, FileStream> lockStreams = new Dictionary<string, FileStream>();
         private static bool isWatching;
         static FileSystemWatcher fileSystemWatcher;
-        static Dictionary<string, List<string>> changeHistory = new Dictionary<string, List<string>>();
+        static Dictionary<string, (string content, bool fromRemote)> changeHistory = new Dictionary<string, (string content, bool fromRemote)>();
 
         static void Main(string[] args)
         {
@@ -348,12 +348,9 @@ namespace microStudioCompanion
             //    fileSystemWatcher.EnableRaisingEvents = false;
             //    Logger.LogLocalInfo($"Wathing disabled while updating file {filePath}");
             //}
+            changeHistory[filePath] = (content, true);
 
-            if (!changeHistory.ContainsKey(filePath))
-            {
-                changeHistory.Add(filePath, new List<string>());
-            }
-            changeHistory[filePath].Add(content);
+
             switch (extension)
             {
                 case ".png":
@@ -575,19 +572,14 @@ namespace microStudioCompanion
                 return false;
             }
 
-            if (!changeHistory.ContainsKey(filePath))
-            {
-                changeHistory.Add(filePath, new List<string>());
-            }
             Thread.Sleep(1000);
             var content = ReadFileContent(filePath, projectDirectory, config);
-            var fileHistory = changeHistory[filePath];
 
-            if (fileHistory.Count > 0)
+            if (changeHistory.ContainsKey(filePath))
             {
-                var lastContent = fileHistory.Last();
+                var (lastContent, fromRemote) = changeHistory[filePath];
 
-                if (content == lastContent || content == null)
+                if (fromRemote || content == lastContent || content == null)
                 {
                     return false;
                 }
@@ -602,8 +594,7 @@ namespace microStudioCompanion
             {
                 return false;
             }
-
-            fileHistory.Add(content);
+            changeHistory[filePath] = (content, false);
 
             return true;
         }
