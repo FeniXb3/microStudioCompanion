@@ -532,6 +532,7 @@ namespace microStudioCompanion
             var clearedPath = Regex.Replace(newStringBuilder.ToString(), @"[^\w\d_/\.]", "").ToLower();
             if (filePath != clearedPath)
             {
+                Logger.LogLocalError($"File name {filePath} is not allowed in microStudio. Renaming to {clearedPath}");
                 var newFullPath = Path.Combine(Path.GetDirectoryName(fullPath), Path.GetFileName(clearedPath));
                 Task.Run(async () => {
                     await Task.Delay(1000);
