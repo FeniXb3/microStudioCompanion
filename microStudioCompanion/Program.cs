@@ -130,7 +130,7 @@ namespace microStudioCompanion
         private static void FinishPulling()
         {
             finished = true;
-            var message = $"Project downloaded to: {Path.Combine(config.localDirectory, (string)selectedProject.title)}";
+            var message = $"Project downloaded to: {Path.Combine(config.localDirectory, projectSlug)}";
             Logger.LogLocalInfo(message, ConsoleColor.Black, ConsoleColor.DarkGreen);
             Console.WriteLine();
         }
@@ -275,7 +275,7 @@ namespace microStudioCompanion
 
         private static void LockFile(string filePath)
         {
-            var projectDirectory = (string)selectedProject.title;
+            string projectDirectory = projectSlug;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
             if (!lockStreams.ContainsKey(filePath) && System.IO.File.Exists(localFilePath))
             {
@@ -287,7 +287,7 @@ namespace microStudioCompanion
         {
             Logger.LogLocalInfo($"Updating local file {filePath} updated to remote content");
 
-            var projectDirectory = (string)selectedProject.title;
+            string projectDirectory = projectSlug;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
 
             var directoryCreated = false;
@@ -348,7 +348,7 @@ namespace microStudioCompanion
         }
         private static void DeleteFile(string filePath)
         {
-            var projectDirectory = (string)selectedProject.title;
+            string projectDirectory = projectSlug;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
             if(lockStreams.ContainsKey(filePath))
             {
@@ -411,7 +411,7 @@ namespace microStudioCompanion
 
         private static void StartWatching(dynamic selectedProject)
         {
-            var localProjectPath = Path.Combine(config.localDirectory, (string)selectedProject.title);
+            string localProjectPath = Path.Combine(config.localDirectory, projectSlug);
             fileSystemWatcher = new FileSystemWatcher(localProjectPath)
             {
                 IncludeSubdirectories = true,
@@ -510,7 +510,7 @@ namespace microStudioCompanion
 
         private static bool ShouldPerformFileChange(string filePath)
         {
-            var projectDirectory = (string)selectedProject.title;
+            string projectDirectory = projectSlug;
             if (!System.IO.File.Exists(Path.Combine(config.localDirectory, projectDirectory, filePath)))
             {
                 return false;
@@ -572,8 +572,7 @@ namespace microStudioCompanion
 
         private static void PushFile(string filePath, dynamic selectedProject, Config config, WebsocketClient socket)
         {
-            var slug = (string)selectedProject.slug;
-            var title = (string)selectedProject.title;
+            string title = selectedProject.title;
 
             new LockProjectFileRequest
             {
@@ -588,7 +587,7 @@ namespace microStudioCompanion
             }
             catch (FileNotFoundException)
             {
-                Logger.LogLocalError($"File {filePath} in project {slug} does not exist");
+                Logger.LogLocalError($"File {filePath} in project {projectSlug} does not exist");
                 return;
             }
             catch
