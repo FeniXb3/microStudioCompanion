@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using CommandLine;
 using Newtonsoft.Json;
 using Websocket.Client;
 
@@ -14,7 +15,6 @@ namespace microStudioCompanion
 {
     class Program
     {
-        static string projectSlug;
         static dynamic selectedProject;
         static Dictionary<string, dynamic> projects = new Dictionary<string, dynamic>();
         static Config config;
@@ -23,7 +23,6 @@ namespace microStudioCompanion
         static Dictionary<string, List<Action>> modes;
         static bool ChangeStep { get; 
             set; } = false;
-        static string currentMode = "";
         static bool finished = false;
         static bool shouldDownloadFiles = true;
         static List<string> subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
@@ -32,7 +31,16 @@ namespace microStudioCompanion
         private static bool isWatching;
         static FileSystemWatcher fileSystemWatcher;
         static Dictionary<string, string> changeHistory = new Dictionary<string, string>();
+        public static Options CurrentOptions { get; set; } = new Options();
 
+        static void RunOptions(Options opts)
+        {
+            CurrentOptions = opts;
+        }
+        static void HandleParseError(IEnumerable<Error> errs)
+        {
+            finished = true;
+        }
         static void Main(string[] args)
         {
             Console.WriteLine(" ----------------------------------------------------------------------");
@@ -47,28 +55,21 @@ namespace microStudioCompanion
                 subDirHandled.Add(item, false);
             }
 
-            currentMode = "";
-            projectSlug = "";
-            string filePath = null;
-            if (args.Length > 0)
-            {
-                currentMode = args[0];
-                if (args.Length > 1)
-                {
-                    projectSlug = args[1];
-                }
+            Parser.Default.ParseArguments<Options>(args)
+              .WithParsed(RunOptions)
+              .WithNotParsed(HandleParseError);
 
-                if (args.Length > 2)
-                {
-                    filePath = args[2];
-                }
+            if (finished)
+            {
+                return;
             }
+
             PrepareModesSteps();
 
-            while(!modes.ContainsKey(currentMode))
+            while(!modes.ContainsKey(CurrentOptions.Mode))
             {
                 Logger.LogLocalQuery($"Choose mode [{string.Join("/", modes.Keys)}]: ");
-                currentMode = Console.ReadLine();
+                CurrentOptions.Mode = Console.ReadLine();
             }
 
             config = Config.Get();
@@ -80,7 +81,7 @@ namespace microStudioCompanion
                 socket.Start().Wait();
                 Logger.LogLocalInfo("Started!");
                 Task.Run(() => StartSendingPing(socket));
-                switch (currentMode)
+                switch (CurrentOptions.Mode)
                 {
                     case "pull":
                         shouldDownloadFiles = true;
@@ -90,17 +91,17 @@ namespace microStudioCompanion
                 }
 
                 stepNumber = 0;
-                modes[currentMode][stepNumber]();
+                modes[CurrentOptions.Mode][stepNumber]();
 
                 while (!finished)
                 {
                     if (ChangeStep)
                     {
-                        if (stepNumber + 1 < modes[currentMode].Count)
+                        if (stepNumber + 1 < modes[CurrentOptions.Mode].Count)
                         {
                             stepNumber++;
                             ChangeStep = false;
-                            modes[currentMode][stepNumber]();
+                            modes[CurrentOptions.Mode][stepNumber]();
                         }
                     }
                 }
@@ -136,7 +137,7 @@ namespace microStudioCompanion
         private static void FinishPulling()
         {
             finished = true;
-            var message = $"Project downloaded to: {Path.Combine(config.localDirectory, projectSlug)}";
+            var message = $"Project downloaded to: {Path.Combine(config.localDirectory, CurrentOptions.Slug)}";
             Logger.LogLocalInfo(message, ConsoleColor.Black, ConsoleColor.DarkGreen);
             Console.WriteLine();
         }
@@ -147,7 +148,7 @@ namespace microStudioCompanion
             {
                 () => TokenHandler.GetToken(config, socket),
                 () => new GetProjectListRequest().SendVia(socket),
-                () => SelectProject(ref projectSlug, projects),
+                () => SelectProject(),
                 () => {
                     if (!Directory.Exists(config.localDirectory))
                     {
@@ -281,7 +282,7 @@ namespace microStudioCompanion
 
         private static void LockFile(string filePath)
         {
-            string projectDirectory = projectSlug;
+            string projectDirectory = CurrentOptions.Slug;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
             if (!lockStreams.ContainsKey(filePath) && System.IO.File.Exists(localFilePath))
             {
@@ -293,7 +294,7 @@ namespace microStudioCompanion
         {
             Logger.LogLocalInfo($"Updating local file {filePath} updated to remote content");
 
-            string projectDirectory = projectSlug;
+            string projectDirectory = CurrentOptions.Slug;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
 
             var directoryCreated = false;
@@ -358,7 +359,7 @@ namespace microStudioCompanion
         }
         private static void DeleteFile(string filePath)
         {
-            string projectDirectory = projectSlug;
+            string projectDirectory = CurrentOptions.Slug;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
             if(lockStreams.ContainsKey(filePath))
             {
@@ -421,7 +422,7 @@ namespace microStudioCompanion
 
         private static void StartWatching(dynamic selectedProject)
         {
-            string localProjectPath = Path.Combine(config.localDirectory, projectSlug);
+            string localProjectPath = Path.Combine(config.localDirectory, CurrentOptions.Slug);
             fileSystemWatcher = new FileSystemWatcher(localProjectPath)
             {
                 IncludeSubdirectories = true,
@@ -520,7 +521,7 @@ namespace microStudioCompanion
 
         private static bool ShouldPerformFileChange(string filePath)
         {
-            string projectDirectory = projectSlug;
+            string projectDirectory = CurrentOptions.Slug;
             if (!System.IO.File.Exists(Path.Combine(config.localDirectory, projectDirectory, filePath)))
             {
                 return false;
@@ -597,7 +598,7 @@ namespace microStudioCompanion
             }
             catch (FileNotFoundException)
             {
-                Logger.LogLocalError($"File {filePath} in project {projectSlug} does not exist");
+                Logger.LogLocalError($"File {filePath} in project {CurrentOptions.Slug} does not exist");
                 return;
             }
             catch
@@ -663,19 +664,19 @@ namespace microStudioCompanion
             }
         }
 
-        private static void SelectProject(ref string projectSlug, Dictionary<string, dynamic> projects)
+        private static void SelectProject()
         {
             while (true)
             {
-                if (string.IsNullOrWhiteSpace(projectSlug))
+                if (string.IsNullOrWhiteSpace(CurrentOptions.Slug))
                 {
                     Logger.LogLocalQuery("Project slug to backup (leave empty to see available projects): ");
-                    projectSlug = Console.ReadLine();
+                    CurrentOptions.Slug = Console.ReadLine();
                 }
 
-                if (projects.ContainsKey(projectSlug))
+                if (projects.ContainsKey(CurrentOptions.Slug))
                 {
-                    selectedProject = projects[projectSlug];
+                    selectedProject = projects[CurrentOptions.Slug];
                     break;
                 }
                 else
@@ -686,7 +687,7 @@ namespace microStudioCompanion
                     {
                         Console.WriteLine($"- Slug: {proj.slug}  Title: {proj.title}");
                     }
-                    projectSlug = null;
+                    CurrentOptions.Slug = null;
                 }
             }
             ChangeStep = true;
