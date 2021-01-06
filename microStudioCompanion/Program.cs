@@ -47,7 +47,7 @@ namespace microStudioCompanion
                 subDirHandled.Add(item, false);
             }
 
-            currentMode = "pull";
+            currentMode = "";
             projectSlug = "";
             string filePath = null;
             if (args.Length > 0)
@@ -64,6 +64,12 @@ namespace microStudioCompanion
                 }
             }
             PrepareModesSteps();
+
+            while(!modes.ContainsKey(currentMode))
+            {
+                Logger.LogLocalQuery($"Choose mode [{string.Join("/", modes.Keys)}]: ");
+                currentMode = Console.ReadLine();
+            }
 
             config = Config.Get();
 
