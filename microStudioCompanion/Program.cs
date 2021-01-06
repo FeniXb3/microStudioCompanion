@@ -325,6 +325,8 @@ namespace microStudioCompanion
                 case ".png":
                     if (isWatching && lockStreams.ContainsKey(filePath))
                     {
+                        lockStreams[filePath].Close();
+                        lockStreams[filePath] = new FileStream(localFilePath, FileMode.Truncate, FileAccess.ReadWrite, FileShare.None);
                         lockStreams[filePath].Write(Convert.FromBase64String(content));
                     }
                     else
@@ -335,6 +337,8 @@ namespace microStudioCompanion
                 default:
                     if (isWatching && lockStreams.ContainsKey(filePath))
                     {
+                        lockStreams[filePath].Close();
+                        lockStreams[filePath] = new FileStream(localFilePath, FileMode.Truncate, FileAccess.ReadWrite, FileShare.None);
                         lockStreams[filePath].Write(System.Text.Encoding.UTF8.GetBytes(content));
                     }
                     else
