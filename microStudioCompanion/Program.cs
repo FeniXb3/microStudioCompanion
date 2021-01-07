@@ -149,38 +149,44 @@ namespace microStudioCompanion
                 () => TokenHandler.GetToken(config, socket),
                 () => new GetProjectListRequest().SendVia(socket),
                 () => SelectProject(),
-                () => {
-                    if (!Directory.Exists(config.localDirectory))
-                    {
-                        Logger.LogLocalError($"Parent directory for your projects ({config.localDirectory}) does not exist.");
-                        config.AskForDirectory();
-                        config.Save();
-                    }
-                    ChangeStep = true;
-                },
+                () => EnsureParentDirectoryExists(),
                 () => PullFiles(config, socket),
-                () =>
-                {
-                    Task.Run( async () => {
-                        await Task.Delay(1000);
-                        int count = -1;
-                        lock(RequestBase.RequestsSent)
-                        {
-                            count = RequestBase.RequestsSent.Count(kvp => !kvp.Value.Handled);
-                        }
-                        while(count > 0)
-                        {
-                            await Task.Delay(1000);
-                            lock(RequestBase.RequestsSent)
-                            {
-                                count = RequestBase.RequestsSent.Count(kvp => !kvp.Value.Handled);
-                            }
-                        }
-                        ChangeStep = true;
-                    });
-                },
+                () => WaitForRequestsToBeHandled(),
 
             };
+        }
+
+        private static void EnsureParentDirectoryExists()
+        {
+            if (!Directory.Exists(config.localDirectory))
+            {
+                Logger.LogLocalError($"Parent directory for your projects ({config.localDirectory}) does not exist.");
+                config.AskForDirectory();
+                config.Save();
+            }
+            ChangeStep = true;
+        }
+
+        private static void WaitForRequestsToBeHandled()
+        {
+            Task.Run(async () =>
+            {
+                await Task.Delay(1000);
+                int count = -1;
+                lock (RequestBase.RequestsSent)
+                {
+                    count = RequestBase.RequestsSent.Count(kvp => !kvp.Value.Handled);
+                }
+                while (count > 0)
+                {
+                    await Task.Delay(1000);
+                    lock (RequestBase.RequestsSent)
+                    {
+                        count = RequestBase.RequestsSent.Count(kvp => !kvp.Value.Handled);
+                    }
+                }
+                ChangeStep = true;
+            });
         }
 
         private static void ReadFiles(string folder, dynamic files)
