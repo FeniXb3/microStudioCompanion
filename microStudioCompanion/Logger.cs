@@ -18,6 +18,8 @@ namespace microStudioCompanion
         private static string outgoing = "<-";
         private static string local = "  ";
 
+        public static bool ShowTimestamps { get; set; }
+
         public static void LogOutgoingInfo(string text, bool withNewLine = true)
         {
             Log(text, info, outgoing, infoColor, null, withNewLine);
@@ -59,6 +61,10 @@ namespace microStudioCompanion
                 Console.BackgroundColor = backgroundColor.Value;
             }
 
+            if (ShowTimestamps)
+            {
+                Console.Write(DateTime.Now.ToString("u"));
+            }
             Console.Write($" {source} {type} {text}");
             Console.ResetColor();
             if (withNewLine)

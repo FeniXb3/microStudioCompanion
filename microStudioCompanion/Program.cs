@@ -65,6 +65,7 @@ namespace microStudioCompanion
             }
 
             PrepareModesSteps();
+            Logger.ShowTimestamps = CurrentOptions.Timestamps;
 
             while(CurrentOptions.Mode == null || !modes.ContainsKey(CurrentOptions.Mode))
             {

@@ -9,5 +9,8 @@ namespace microStudioCompanion
 
         [Option('s', "slug", Required = false, HelpText = "Slug of the project the app should work on.")]
         public string Slug { get; set; }
+
+        [Option('t', "timestampes", Required = false, HelpText = "Flag defining if timestamps should be shown in logs. False by default.")]
+        public bool Timestamps { get; set; }
     }
 }
