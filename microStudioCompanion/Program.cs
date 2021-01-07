@@ -66,7 +66,7 @@ namespace microStudioCompanion
 
             PrepareModesSteps();
 
-            while(!modes.ContainsKey(CurrentOptions.Mode))
+            while(CurrentOptions.Mode == null || !modes.ContainsKey(CurrentOptions.Mode))
             {
                 Logger.LogLocalQuery($"Choose mode [{string.Join("/", modes.Keys)}]: ");
                 CurrentOptions.Mode = Console.ReadLine();
