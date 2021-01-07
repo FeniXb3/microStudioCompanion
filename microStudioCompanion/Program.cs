@@ -269,7 +269,7 @@ namespace microStudioCompanion
                         }
                         break;
                     case ResponseTypes.read_project_file:
-                        Logger.LogIncomingInfo($"Reading of remote file {RequestBase.GetSentRequest<ReadProjectFileRequest>(requestId).file} completed");
+                        Logger.LogIncomingInfo($"{RequestBase.GetSentRequest<ReadProjectFileRequest>(requestId).file} Reading of remote file completed");
                         UpdateFile((string)RequestBase.GetSentRequest<ReadProjectFileRequest>(requestId).file, (string)response.content);
                         break;
                     case ResponseTypes.pong:
@@ -299,7 +299,7 @@ namespace microStudioCompanion
 
         private static void UpdateFile(string filePath, string content)
         {
-            Logger.LogLocalInfo($"Updating local file {filePath} updated to remote content");
+            Logger.LogLocalInfo($"{filePath} Updating local file updated to remote content");
 
             string projectDirectory = CurrentOptions.Slug;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
@@ -355,13 +355,13 @@ namespace microStudioCompanion
                     }
                     break;
             }
-            Logger.LogLocalInfo($"Local file {filePath} updated to remote content");
+            Logger.LogLocalInfo($"{filePath} Local file updated to remote content");
 
             if (lockStreams.ContainsKey(filePath))
             {
                 lockStreams[filePath].Close();
                 lockStreams.Remove(filePath);
-                Logger.LogLocalInfo($"Unlocked local file {filePath}");
+                Logger.LogLocalInfo($"{filePath} Unlocked local file");
             }
         }
         private static void DeleteFile(string filePath)
@@ -372,11 +372,11 @@ namespace microStudioCompanion
             {
                 lockStreams[filePath].Close();
                 lockStreams.Remove(filePath);
-                Logger.LogLocalInfo($"Unlocked local file {filePath}");
+                Logger.LogLocalInfo($"{filePath} Unlocked local file");
             }
 
             System.IO.File.Delete(localFilePath);
-            Logger.LogLocalInfo($"Removed local file {filePath}");
+            Logger.LogLocalInfo($"{filePath} Removed local file");
         }
 
         private static void HandleError(string error)
