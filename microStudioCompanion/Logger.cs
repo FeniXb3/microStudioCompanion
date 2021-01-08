@@ -19,6 +19,7 @@ namespace microStudioCompanion
         private static string local = "  ";
 
         public static bool ShowTimestamps { get; set; }
+        public static bool ColorMessages { get; internal set; }
 
         public static void LogOutgoingInfo(string text, bool withNewLine = true)
         {
@@ -52,11 +53,11 @@ namespace microStudioCompanion
 
         private static void Log(string text, string type, string source, ConsoleColor? textColor, ConsoleColor? backgroundColor, bool withNewLine = true)
         {
-            if (textColor.HasValue)
+            if (ColorMessages && textColor.HasValue)
             {
                 Console.ForegroundColor = textColor.Value;
             }
-            if (backgroundColor.HasValue)
+            if (ColorMessages && backgroundColor.HasValue)
             {
                 Console.BackgroundColor = backgroundColor.Value;
             }
@@ -66,7 +67,11 @@ namespace microStudioCompanion
                 Console.Write(DateTime.Now.ToString("u"));
             }
             Console.Write($" {source} {type} {text}");
-            Console.ResetColor();
+            if (ColorMessages)
+            {
+                Console.ResetColor();
+            }
+
             if (withNewLine)
             {
                 Console.WriteLine();

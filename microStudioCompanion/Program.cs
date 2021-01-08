@@ -66,6 +66,7 @@ namespace microStudioCompanion
 
             PrepareModesSteps();
             Logger.ShowTimestamps = CurrentOptions.Timestamps;
+            Logger.ColorMessages = !CurrentOptions.NoColor;
 
             while(CurrentOptions.Mode == null || !modes.ContainsKey(CurrentOptions.Mode))
             {
