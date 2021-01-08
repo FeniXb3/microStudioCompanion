@@ -4,6 +4,11 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <RootNamespace>microStudioCompanion</RootNamespace>
+    <Company>Enklawa twórcza Konrad Gadzina</Company>
+    <Authors>Konrad Gadzina</Authors>
+    <PackageProjectUrl>https://fenix.itch.io/microstudio-companion</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/FeniXb3/microStudioCompanion</RepositoryUrl>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>
