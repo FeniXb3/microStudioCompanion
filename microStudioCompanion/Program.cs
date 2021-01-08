@@ -397,7 +397,7 @@ namespace microStudioCompanion
                         break;
                     case ResponseErrors.not_connected:
                         Logger.LogIncomingError($"Not connected");
-                        TokenHandler.Login(config, socket);
+                        TokenHandler.GetToken(config, socket);
                         break;
                     case ResponseErrors.wrong_password:
                         Logger.LogIncomingError($"Wrong password");
