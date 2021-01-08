@@ -230,21 +230,21 @@ namespace microStudioCompanion
                         ChangeStep = true;
                         break;
                     case ResponseTypes.write_project_file:
-                        Logger.LogIncomingInfo($"Writing of file {RequestBase.GetSentRequest<WriteProjectFileRequest>(requestId).file} completed");
+                        Logger.LogIncomingInfo($"{RequestBase.GetSentRequest<WriteProjectFileRequest>(requestId).file} Writing of file completed");
                         break;
                     case ResponseTypes.delete_project_file:
-                        Logger.LogIncomingInfo($"Deleting of file {RequestBase.GetSentRequest<DeleteProjectFileRequest>(requestId).file} completed");
+                        Logger.LogIncomingInfo($"{RequestBase.GetSentRequest<DeleteProjectFileRequest>(requestId).file} Deleting of file completed");
                         break;
                     case ResponseTypes.project_file_locked:
-                        Logger.LogIncomingInfo($"File {(string)response.file} locked remotely by {(string)response.user}");
+                        Logger.LogIncomingInfo($"{(string)response.file} File locked remotely by {(string)response.user}");
                         LockFile((string)response.file);
                         break;
                     case ResponseTypes.project_file_update:
-                        Logger.LogIncomingInfo($"File {(string)response.file} updated remotely");
+                        Logger.LogIncomingInfo($"{(string)response.file} File updated remotely");
                         UpdateFile((string)response.file, (string)response.content);
                         break;
                     case ResponseTypes.project_file_deleted:
-                        Logger.LogIncomingInfo($"File {(string)response.file} deleted remotely");
+                        Logger.LogIncomingInfo($"{(string)response.file} File deleted remotely");
                         DeleteFile((string)response.file);
                         break;
                     case ResponseTypes.list_project_files:
@@ -288,7 +288,7 @@ namespace microStudioCompanion
 
         private static void UpdateFile(string filePath, string content)
         {
-            Logger.LogLocalInfo($"{filePath} Updating local file updated to remote content");
+            Logger.LogLocalInfo($"{filePath} Updating local file to remote content");
 
             string projectDirectory = CurrentOptions.Slug;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
