@@ -24,7 +24,6 @@ namespace microStudioCompanion
         static bool ChangeStep { get; 
             set; } = false;
         static bool finished = false;
-        static bool shouldDownloadFiles = true;
         static List<string> subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
         static Dictionary<string, bool> subDirHandled = new Dictionary<string, bool>();
         private static Dictionary<string, FileStream> lockStreams = new Dictionary<string, FileStream>();
@@ -83,14 +82,6 @@ namespace microStudioCompanion
                 socket.Start().Wait();
                 Logger.LogLocalInfo("Started!");
                 Task.Run(() => StartSendingPing(socket));
-                switch (CurrentOptions.Mode)
-                {
-                    case "pull":
-                        shouldDownloadFiles = true;
-                        break;
-                    case "watch":
-                        break;
-                }
 
                 stepNumber = 0;
                 modes[CurrentOptions.Mode][stepNumber]();
@@ -258,10 +249,7 @@ namespace microStudioCompanion
                         break;
                     case ResponseTypes.list_project_files:
                         Logger.LogIncomingInfo($"Received files list for directory {RequestBase.GetSentRequest<ListProjectFilesRequest>(requestId).folder}");
-                        if (shouldDownloadFiles)
-                        {
-                            ReadFiles(RequestBase.GetSentRequest<ListProjectFilesRequest>(requestId).folder, response.files);
-                        }
+                        ReadFiles(RequestBase.GetSentRequest<ListProjectFilesRequest>(requestId).folder, response.files);
                         subDirHandled[RequestBase.GetSentRequest<ListProjectFilesRequest>(requestId).folder] = true;
 
                         if (subDirHandled.Count(kvp => !kvp.Value) == 0)
