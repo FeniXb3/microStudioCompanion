@@ -629,6 +629,7 @@ namespace microStudioCompanion
             {
                 return null;
             }
+            while (lockStreams.ContainsKey(filePath)) ;
 
             var extension = Path.GetExtension(filePath);
             switch (extension)
