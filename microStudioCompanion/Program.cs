@@ -590,7 +590,7 @@ namespace microStudioCompanion
             string content;
             try
             {
-                content = ReadFileContent(filePath, selectedProject, config);
+                content = ReadFileContent(filePath, CurrentOptions.Slug, config);
             }
             catch (FileNotFoundException)
             {
@@ -600,7 +600,7 @@ namespace microStudioCompanion
             catch
             {
                 Thread.Sleep(300);
-                content = ReadFileContent(filePath, title, config);
+                content = ReadFileContent(filePath, CurrentOptions.Slug, config);
             }
             new WriteProjectFileRequest
             {
