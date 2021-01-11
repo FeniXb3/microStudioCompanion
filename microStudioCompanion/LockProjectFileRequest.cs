@@ -10,6 +10,7 @@ namespace microStudioCompanion
         public string file { get; set; }
         public LockProjectFileRequest()
         {
+            Handled = true;
             name = "lock_project_file";
         }
 

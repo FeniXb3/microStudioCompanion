@@ -125,6 +125,19 @@ namespace microStudioCompanion
             var pullSteps = commonSteps.ToList();
             pullSteps.Add(() => FinishPulling());
             modes.Add("pull", pullSteps);
+
+            var pushSteps = new List<Action>()
+            {
+                () => TokenHandler.GetToken(config, socket),
+                () => new GetProjectListRequest().SendVia(socket),
+                () => SelectProject(),
+                () => EnsureParentDirectoryExists(),
+                () => PushAllFiles(),
+                () => WaitForRequestsToBeHandled(),
+                () => FinishPushing()
+
+            };
+            modes.Add("push", pushSteps);
         }
 
         private static void FinishPulling()
@@ -133,6 +146,22 @@ namespace microStudioCompanion
             var message = $"Project downloaded to: {Path.Combine(config.localDirectory, CurrentOptions.Slug)}";
             Logger.LogLocalInfo(message, ConsoleColor.Black, ConsoleColor.DarkGreen);
             Console.WriteLine();
+        }
+        private static void FinishPushing()
+        {
+            finished = true;
+            var message = $"Project {CurrentOptions.Slug} uploaded to remote server from {Path.Combine(config.localDirectory, CurrentOptions.Slug)}";
+            Logger.LogLocalInfo(message, ConsoleColor.Black, ConsoleColor.DarkGreen);
+            Console.WriteLine();
+        }
+        private static void StartListeningToProject()
+        {
+            new ListenToProjectRequest
+            {
+                user = config.nick,
+                project = CurrentOptions.Slug
+            }.SendVia(socket);
+            ChangeStep = true;
         }
 
         private static List<Action> GetCommonSteps()
@@ -434,6 +463,33 @@ namespace microStudioCompanion
             isWatching = true;
         }
 
+        private static void PushAllFiles()
+        {
+            Task.Run(async () => { 
+                string localProjectPath = Path.Combine(config.localDirectory, CurrentOptions.Slug);
+
+                foreach (var item in subDirectories)
+                {
+                    string subDirPath = Path.Combine(localProjectPath, item);
+                    var fileNames = Directory.GetFiles(subDirPath, "*", SearchOption.AllDirectories);
+
+                    foreach (var fileName in fileNames)
+                    {
+                        var filePath = fileName.Replace(localProjectPath+"\\", "").Replace('\\', '/');
+                        if (RenameIfNeeded(filePath, fileName, out string newFullPath))
+                        {
+                            await Task.Delay(1000);
+                            filePath = newFullPath.Replace(localProjectPath + "\\", "").Replace('\\', '/');
+                        }
+
+                        PushFile(filePath, selectedProject, config, socket);
+                    }
+                }
+
+                ChangeStep = true;
+            });
+        }
+
         private static void FileSystemWatcher_Deleted(object sender, FileSystemEventArgs e)
         {
             var filePath = e.Name.Replace('\\', '/');
@@ -462,7 +518,7 @@ namespace microStudioCompanion
                 return;
             }
 
-            if (RenameIfNeeded(filePath, e.FullPath))
+            if (RenameIfNeeded(filePath, e.FullPath, out _))
             {
                 return;
             }
@@ -470,8 +526,9 @@ namespace microStudioCompanion
             PushFile(filePath, selectedProject, config, socket);
         }
 
-        private static bool RenameIfNeeded(string filePath, string fullPath)
+        private static bool RenameIfNeeded(string filePath, string fullPath, out string newFullPath)
         {
+            newFullPath = fullPath;
             var newStringBuilder = new StringBuilder();
             newStringBuilder.Append(filePath.Normalize(NormalizationForm.FormKD)
                                             .Where(x => x < 128)
@@ -480,11 +537,21 @@ namespace microStudioCompanion
             var clearedPath = Regex.Replace(newStringBuilder.ToString(), @"[^\w\d_/\.]", "").ToLower();
             if (filePath != clearedPath)
             {
-                Logger.LogLocalError($"File name {filePath} is not allowed in microStudio. Renaming to {clearedPath}");
-                var newFullPath = Path.Combine(Path.GetDirectoryName(fullPath), Path.GetFileName(clearedPath));
+                newFullPath = Path.Combine(Path.GetDirectoryName(fullPath), Path.GetFileName(clearedPath));
+                var tmp = newFullPath;
+                var extension = Path.GetExtension(newFullPath);
+                int number = 2;
+                while (File.Exists(newFullPath))
+                {
+                    var newFileName = $"{Path.GetFileNameWithoutExtension(tmp)}{number++}{extension}";
+                    newFullPath = Path.Combine(Path.GetDirectoryName(fullPath), newFileName);
+                }
+
+                tmp = newFullPath;
                 Task.Run(async () => {
-                    await Task.Delay(1000);
-                    System.IO.File.Move(fullPath, newFullPath);
+                    Logger.LogLocalError($"File name {filePath} is not allowed in microStudio. Renaming to {Path.GetFileName(tmp)}");
+                    await Task.Delay(300);
+                    System.IO.File.Move(fullPath, tmp);
                 });
                 return true;
             }
@@ -506,7 +573,7 @@ namespace microStudioCompanion
                 changeHistory.Remove(oldFilePath);
             }
 
-            if(RenameIfNeeded(filePath, e.FullPath))
+            if(RenameIfNeeded(filePath, e.FullPath, out _))
             { 
                 return;
             }
