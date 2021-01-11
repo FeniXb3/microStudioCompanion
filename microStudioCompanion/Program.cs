@@ -649,7 +649,7 @@ namespace microStudioCompanion
             {
                 var name = (string)selectedProject.title;
                 var localDirectoryPath = Path.Combine(config.localDirectory, name, localDirectoryMapping[dir]);
-                if (Directory.Exists(localDirectoryPath))
+                if (CurrentOptions.CleanStart && Directory.Exists(localDirectoryPath))
                 {
                     Directory.Delete(localDirectoryPath, true);
                 }

@@ -8,7 +8,8 @@
     <Authors>Konrad Gadzina</Authors>
     <PackageProjectUrl>https://fenix.itch.io/microstudio-companion</PackageProjectUrl>
     <RepositoryUrl>https://github.com/FeniXb3/microStudioCompanion</RepositoryUrl>
-    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <AssemblyVersion>2.1.0.0</AssemblyVersion>
+    <FileVersion>2.1.0.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>

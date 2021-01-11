@@ -15,5 +15,9 @@ namespace microStudioCompanion
 
         [Option("no-color", Required = false, HelpText = "Flag defining if the app should ommit displaying messages in color. False by default.")]
         public bool NoColor { get; set; }
+
+        [Option('c', "clean-start", Required = false, HelpText = "Flag defining if project subdirectories should be removed before pulling all current files at the beginning in watch and pull modes. False by default.")]
+
+        public bool CleanStart { get; internal set; }
     }
 }
