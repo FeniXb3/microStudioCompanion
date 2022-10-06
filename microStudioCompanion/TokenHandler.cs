@@ -6,7 +6,7 @@ namespace microStudioCompanion
 {
     class TokenHandler
     {
-        public static string tokenInfoFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "tokenInfo.JSON");
+        public static string tokenInfoFilePath = Path.Combine(System.AppContext.BaseDirectory, "tokenInfo.JSON");
 
         public static void GetToken(Config config, WebsocketClient socket)
         {

@@ -8,8 +8,8 @@ namespace microStudioCompanion
 {
     public class Config
     {
-        public static string configFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "config.JSON");
-        public static string defaultProjectsDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        public static string configFilePath = Path.Combine(System.AppContext.BaseDirectory, "config.JSON");
+        public static string defaultProjectsDirectory = Path.Combine(System.AppContext.BaseDirectory, "Projects");
         public string nick { get; set; }
         public string localDirectory { get; set; }
 
