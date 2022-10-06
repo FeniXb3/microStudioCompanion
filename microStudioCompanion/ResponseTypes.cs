@@ -15,5 +15,7 @@
         project_file_deleted,
         list_project_files,
         read_project_file,
+        user_stats,
+        achievements
     }
 }
