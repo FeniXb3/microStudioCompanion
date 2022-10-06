@@ -21,10 +21,13 @@ namespace microStudioCompanion
         static WebsocketClient socket;
         static int stepNumber = 0;
         static Dictionary<string, List<Action>> modes;
-        static bool ChangeStep { get; 
-            set; } = false;
+        static bool ChangeStep
+        {
+            get;
+            set;
+        } = false;
         static bool finished = false;
-        static List<string> subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
+        static List<string> subDirectories = new List<string> { "ms", "sprites", "maps", "doc" ,"assets"};
         static Dictionary<string, bool> subDirHandled = new Dictionary<string, bool>();
         private static Dictionary<string, FileStream> lockStreams = new Dictionary<string, FileStream>();
         private static bool isWatching;
@@ -67,7 +70,7 @@ namespace microStudioCompanion
             Logger.ShowTimestamps = CurrentOptions.Timestamps;
             Logger.ColorMessages = !CurrentOptions.NoColor;
 
-            while(CurrentOptions.Mode == null || !modes.ContainsKey(CurrentOptions.Mode))
+            while (CurrentOptions.Mode == null || !modes.ContainsKey(CurrentOptions.Mode))
             {
                 Logger.LogLocalQuery($"Choose mode [{string.Join("/", modes.Keys)}]: ");
                 CurrentOptions.Mode = Console.ReadLine();
@@ -392,7 +395,7 @@ namespace microStudioCompanion
         {
             string projectDirectory = CurrentOptions.Slug;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
-            if(lockStreams.ContainsKey(filePath))
+            if (lockStreams.ContainsKey(filePath))
             {
                 lockStreams[filePath].Close();
                 lockStreams.Remove(filePath);
@@ -457,7 +460,7 @@ namespace microStudioCompanion
             fileSystemWatcher = new FileSystemWatcher(localProjectPath)
             {
                 IncludeSubdirectories = true,
-                Filters = { "*.ms", "*.png", "*.json", "*.md" },
+                Filters = { "*.ms", "*.png", "*.json", "*.md", "*.ttf" },
                 EnableRaisingEvents = true
             };
             fileSystemWatcher.Changed += FileSystemWatcher_Changed;
@@ -471,7 +474,8 @@ namespace microStudioCompanion
 
         private static void PushAllFiles()
         {
-            Task.Run(async () => { 
+            Task.Run(async () =>
+            {
                 string localProjectPath = Path.Combine(config.localDirectory, CurrentOptions.Slug);
 
                 foreach (var item in subDirectories)
@@ -481,7 +485,7 @@ namespace microStudioCompanion
 
                     foreach (var fileName in fileNames)
                     {
-                        var filePath = fileName.Replace(localProjectPath+"\\", "").Replace('\\', '/');
+                        var filePath = fileName.Replace(localProjectPath + "\\", "").Replace('\\', '/');
                         if (RenameIfNeeded(filePath, fileName, out string newFullPath))
                         {
                             await Task.Delay(1000);
@@ -554,7 +558,8 @@ namespace microStudioCompanion
                 }
 
                 tmp = newFullPath;
-                Task.Run(async () => {
+                Task.Run(async () =>
+                {
                     Logger.LogLocalError($"File name {filePath} is not allowed in microStudio. Renaming to {Path.GetFileName(tmp)}");
                     await Task.Delay(300);
                     System.IO.File.Move(fullPath, tmp);
@@ -579,8 +584,8 @@ namespace microStudioCompanion
                 changeHistory.Remove(oldFilePath);
             }
 
-            if(RenameIfNeeded(filePath, e.FullPath, out _))
-            { 
+            if (RenameIfNeeded(filePath, e.FullPath, out _))
+            {
                 return;
             }
 
@@ -603,7 +608,7 @@ namespace microStudioCompanion
             if (changeHistory.ContainsKey(filePath))
             {
                 var lastContent = changeHistory[filePath];
-                
+
                 if (content == lastContent || content == null)
                 {
                     result = false;
@@ -659,7 +664,7 @@ namespace microStudioCompanion
                 file = filePath,
                 project = (int)selectedProject.id
             }.SendVia(socket);
-            
+
             string content;
             try
             {
@@ -704,7 +709,7 @@ namespace microStudioCompanion
                     using (var fileStream = new FileStream(localFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                     using (var textReader = new StreamReader(fileStream))
                     {
-                         content = textReader.ReadToEnd();
+                        content = textReader.ReadToEnd();
                     }
                     break;
             }
@@ -719,7 +724,8 @@ namespace microStudioCompanion
                             { "ms", "ms" },
                             { "sprites", "sprites" },
                             { "maps", "maps" },
-                            { "doc", "doc" }
+                            { "doc", "doc" },
+                            { "assets", "assets" },
                         };
 
 
