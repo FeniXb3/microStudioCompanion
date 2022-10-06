@@ -292,6 +292,12 @@ namespace microStudioCompanion
                         break;
                     case ResponseTypes.pong:
                         break;
+                    case ResponseTypes.user_stats:
+                        Logger.LogIncomingInfo("Received users stats");
+                        break;
+                    case ResponseTypes.achievements:
+                        Logger.LogIncomingInfo("Received achievements data");
+                        break;
                     default:
                         Logger.LogLocalError($"Unhandled response type: {responseTypeText}");
                         Logger.LogIncomingInfo($"Incomming message: {response}");
@@ -694,7 +700,12 @@ namespace microStudioCompanion
                     content = Convert.ToBase64String(System.IO.File.ReadAllBytes(localFilePath));
                     break;
                 default:
-                    content = System.IO.File.ReadAllText(localFilePath);
+                    //Read only file even if locked
+                    using (var fileStream = new FileStream(localFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    using (var textReader = new StreamReader(fileStream))
+                    {
+                         content = textReader.ReadToEnd();
+                    }
                     break;
             }
 
