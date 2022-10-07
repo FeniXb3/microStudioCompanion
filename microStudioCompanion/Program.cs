@@ -100,6 +100,19 @@ namespace microStudioCompanion
                             modes[CurrentOptions.Mode][stepNumber]();
                         }
                     }
+
+                    if (Console.KeyAvailable)
+                    {
+                        ConsoleKeyInfo key = Console.ReadKey(true);
+                        switch (key.Key)
+                        {
+                            case ConsoleKey.Q:
+                                finished = true;
+                                break;
+                            default:
+                                break;
+                        }
+                    }
                 }
             }
             Console.WriteLine();
@@ -133,7 +146,7 @@ namespace microStudioCompanion
             {
                 () => TokenHandler.GetToken(config, socket),
                 () => new GetProjectListRequest().SendVia(socket),
-                () => SelectProject(),
+                () => SelectProject(config),
                 () => EnsureParentDirectoryExists(),
                 () => PushAllFiles(),
                 () => WaitForRequestsToBeHandled(),
@@ -173,7 +186,7 @@ namespace microStudioCompanion
             {
                 () => TokenHandler.GetToken(config, socket),
                 () => new GetProjectListRequest().SendVia(socket),
-                () => SelectProject(),
+                () => SelectProject(config),
                 () => EnsureParentDirectoryExists(),
                 () => PullFiles(config, socket),
                 () => WaitForRequestsToBeHandled(),
@@ -469,6 +482,7 @@ namespace microStudioCompanion
             fileSystemWatcher.Deleted += FileSystemWatcher_Deleted;
             var message = $"Watching project {(string)selectedProject.title} directory: {localProjectPath}";
             Logger.LogLocalInfo(message, ConsoleColor.Black, ConsoleColor.DarkGreen);
+            Logger.LogLocalInfo("Press q to exit", ConsoleColor.Black, ConsoleColor.DarkGreen);
             isWatching = true;
         }
 
@@ -747,19 +761,25 @@ namespace microStudioCompanion
             }
         }
 
-        private static void SelectProject()
+        private static void SelectProject(Config config)
         {
             while (true)
             {
                 if (string.IsNullOrWhiteSpace(CurrentOptions.Slug))
                 {
-                    Logger.LogLocalQuery("Project slug to backup (leave empty to see available projects): ");
+                    Logger.LogLocalQuery($"Project slug to backup (leave empty to see available projects)" +
+                        $" (! to use last Slug: {config.lastSlug}) ");
                     CurrentOptions.Slug = Console.ReadLine();
                 }
-
+                if (CurrentOptions.Slug == "!" && !string.IsNullOrWhiteSpace(config.lastSlug))
+                {
+                    CurrentOptions.Slug = config.lastSlug;
+                }
                 if (projects.ContainsKey(CurrentOptions.Slug))
                 {
                     selectedProject = projects[CurrentOptions.Slug];
+                    config.lastSlug = CurrentOptions.Slug;
+                    config.Save();
                     break;
                 }
                 else
