@@ -27,7 +27,7 @@ namespace microStudioCompanion
             set;
         } = false;
         static bool finished = false;
-        static List<string> subDirectories = new List<string> { "ms", "sprites", "maps", "doc" ,"assets"};
+        static List<string> subDirectories = new List<string> { "ms", "sprites", "maps", "doc", "assets" };
         static Dictionary<string, bool> subDirHandled = new Dictionary<string, bool>();
         private static Dictionary<string, FileStream> lockStreams = new Dictionary<string, FileStream>();
         private static bool isWatching;
@@ -523,6 +523,7 @@ namespace microStudioCompanion
         private static void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
         {
             var filePath = e.Name.Replace('\\', '/');
+
             if (!ShouldPerformFileChange(filePath))
             {
                 return;
@@ -620,7 +621,8 @@ namespace microStudioCompanion
                 result = false;
             }
 
-            if (!subDirectories.Contains(Path.GetDirectoryName(filePath)))
+            var root = filePath.Split(Path.AltDirectorySeparatorChar).First();
+            if (!subDirectories.Contains(root))
             {
                 result = false;
             }
