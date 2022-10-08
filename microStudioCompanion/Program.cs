@@ -339,6 +339,7 @@ namespace microStudioCompanion
 
         private static void UpdateFile(string filePath, string content)
         {
+            filePath = filePath.Replace('-', '/');
             Logger.LogLocalInfo($"{filePath} Updating local file to remote content");
 
             string projectDirectory = CurrentOptions.Slug;
@@ -406,6 +407,7 @@ namespace microStudioCompanion
         }
         private static void DeleteFile(string filePath)
         {
+            filePath = filePath.Replace('-', '/');
             string projectDirectory = CurrentOptions.Slug;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
             if (lockStreams.ContainsKey(filePath))
@@ -522,7 +524,8 @@ namespace microStudioCompanion
                 return;
             }
 
-            if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
+            var root = filePath.Split(Path.AltDirectorySeparatorChar).First();
+            if (!subDirectories.Contains(root))
             {
                 return;
             }
@@ -655,29 +658,37 @@ namespace microStudioCompanion
 
             PushFile(filePath, selectedProject, config, socket);
         }
+        private static string localPathToRemotePath(string localPath)
+        {
+            var i = localPath.IndexOf('/');
+            var remotePath = localPath.Substring(0, i) + "/" + localPath.Substring(i + 1).Replace('/', '-');
+            return remotePath;
+        }
 
         private static void DeleteRemoteFile(string filePath, dynamic selectedProject, Config config, WebsocketClient socket)
         {
+            var remoteFilePath = localPathToRemotePath(filePath);
+
             new LockProjectFileRequest
             {
-                file = filePath,
+                file = remoteFilePath,
                 project = (int)selectedProject.id
             }.SendVia(socket);
 
             new DeleteProjectFileRequest
             {
                 project = (int)selectedProject.id,
-                file = filePath
+                file = remoteFilePath
             }.SendVia(socket);
-        }
+        }       
 
         private static void PushFile(string filePath, dynamic selectedProject, Config config, WebsocketClient socket)
         {
-            string title = selectedProject.title;
+            var remoteFilePath = localPathToRemotePath(filePath);
 
             new LockProjectFileRequest
             {
-                file = filePath,
+                file = remoteFilePath,
                 project = (int)selectedProject.id
             }.SendVia(socket);
 
@@ -699,7 +710,7 @@ namespace microStudioCompanion
             new WriteProjectFileRequest
             {
                 project = selectedProject.id,
-                file = filePath,
+                file = remoteFilePath,
                 content = content
             }.SendVia(socket);
         }
