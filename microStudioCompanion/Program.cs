@@ -27,7 +27,7 @@ namespace microStudioCompanion
             set;
         } = false;
         static bool finished = false;
-        static List<string> subDirectories = new List<string> { "ms", "sprites", "maps", "doc", "assets" };
+        static List<string> subDirectories = new List<string> { "ms", "sprites", "maps", "doc", "assets","music","sounds" };
         static Dictionary<string, bool> subDirHandled = new Dictionary<string, bool>();
         private static Dictionary<string, FileStream> lockStreams = new Dictionary<string, FileStream>();
         private static bool isWatching;
@@ -475,7 +475,8 @@ namespace microStudioCompanion
             fileSystemWatcher = new FileSystemWatcher(localProjectPath)
             {
                 IncludeSubdirectories = true,
-                Filters = { "*.ms", "*.png", "*.json", "*.md", "*.ttf" },
+                Filters = { "*.ms", "*.png", "*.json", "*.md",
+                            "*.ttf","*.wav","*.mp3" },
                 EnableRaisingEvents = true
             };
             fileSystemWatcher.Changed += FileSystemWatcher_Changed;
@@ -753,6 +754,8 @@ namespace microStudioCompanion
                             { "maps", "maps" },
                             { "doc", "doc" },
                             { "assets", "assets" },
+                            { "music", "music" },
+                            { "sounds", "sounds" },
                         };
 
 
