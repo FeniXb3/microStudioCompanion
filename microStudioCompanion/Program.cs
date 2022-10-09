@@ -483,7 +483,7 @@ namespace microStudioCompanion
             fileSystemWatcher = new FileSystemWatcher(localProjectPath)
             {
                 Filters = { "*.ms", "*.png", "*.json", "*.md",
-                            "*.ttf","*.wav","*.mp3" },                
+                            "*.ttf","*.wav","*.mp3" },
                 NotifyFilter = NotifyFilters.LastWrite |
                                NotifyFilters.FileName |
                                NotifyFilters.DirectoryName |
@@ -732,11 +732,31 @@ namespace microStudioCompanion
                 Thread.Sleep(300);
                 content = ReadFileContent(filePath, CurrentOptions.Slug, config);
             }
+
+
+            var thumbnail = "";
+            var root = filePath.Split(Path.AltDirectorySeparatorChar).First();
+            switch (root)
+            {
+                case "assets":
+                    thumbnail = Convert.ToBase64String(System.IO.File.ReadAllBytes("thumbnails\\defaultasset.png"));
+                    break;
+                case "sounds":
+                    thumbnail = Convert.ToBase64String(System.IO.File.ReadAllBytes("thumbnails\\defaultsound.png"));
+                    break;
+                case "music":
+                    thumbnail = Convert.ToBase64String(System.IO.File.ReadAllBytes("thumbnails\\defaultmusic.png"));
+                    break;
+                default:
+                    break;
+            }
+
             new WriteProjectFileRequest
             {
                 project = selectedProject.id,
                 file = remoteFilePath,
-                content = content
+                content = content,
+                thumbnail = thumbnail
             }.SendVia(socket);
         }
 
