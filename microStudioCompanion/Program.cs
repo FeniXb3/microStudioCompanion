@@ -274,6 +274,9 @@ namespace microStudioCompanion
                         }
                         ChangeStep = true;
                         break;
+                    case ResponseTypes.project_options_updated:
+                        Logger.LogIncomingInfo("Received project options");
+                        break;
                     case ResponseTypes.write_project_file:
                         Logger.LogIncomingInfo($"{RequestBase.GetSentRequest<WriteProjectFileRequest>(requestId).file} Writing of file completed");
                         break;

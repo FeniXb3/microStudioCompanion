@@ -8,6 +8,7 @@
         logged_in,
         token_valid,
         project_list,
+        project_options_updated,
         write_project_file,
         delete_project_file,
         project_file_locked,
@@ -16,6 +17,6 @@
         list_project_files,
         read_project_file,
         user_stats,
-        achievements
+        achievements,
     }
 }
