@@ -27,7 +27,7 @@ namespace microStudioCompanion
             set;
         } = false;
         static bool finished = false;
-        static List<string> subDirectories = new List<string> { "ms", "sprites", "maps", "doc", "assets","music","sounds" };
+        static List<string> subDirectories = new List<string> { "ms", "sprites", "maps", "doc", "assets", "music", "sounds" };
         static Dictionary<string, bool> subDirHandled = new Dictionary<string, bool>();
         private static Dictionary<string, FileStream> lockStreams = new Dictionary<string, FileStream>();
         private static bool isWatching;
@@ -419,6 +419,14 @@ namespace microStudioCompanion
 
             System.IO.File.Delete(localFilePath);
             Logger.LogLocalInfo($"{filePath} Removed local file");
+
+            var parentDirectory = new FileInfo(localFilePath).Directory.FullName;
+            var subCount = filePath.Count(s => s == '/');
+            if (!Directory.EnumerateFiles(parentDirectory, "*.*", SearchOption.AllDirectories).Any() && subCount > 1)
+            {
+                Directory.Delete(parentDirectory);
+                Logger.LogLocalInfo($"Removed empty directory {parentDirectory}");
+            }
         }
 
         private static void HandleError(string error)
@@ -474,9 +482,14 @@ namespace microStudioCompanion
             string localProjectPath = Path.Combine(config.localDirectory, CurrentOptions.Slug);
             fileSystemWatcher = new FileSystemWatcher(localProjectPath)
             {
-                IncludeSubdirectories = true,
                 Filters = { "*.ms", "*.png", "*.json", "*.md",
-                            "*.ttf","*.wav","*.mp3" },
+                            "*.ttf","*.wav","*.mp3" },                
+                NotifyFilter = NotifyFilters.LastWrite |
+                               NotifyFilters.FileName |
+                               NotifyFilters.DirectoryName |
+                               NotifyFilters.FileName |
+                               NotifyFilters.Attributes,
+                IncludeSubdirectories = true,
                 EnableRaisingEvents = true
             };
             fileSystemWatcher.Changed += FileSystemWatcher_Changed;
@@ -563,17 +576,21 @@ namespace microStudioCompanion
                                             .Where(x => x < 128)
                                             .ToArray());
 
-            var clearedPath = Regex.Replace(newStringBuilder.ToString(), @"[^\w\d_/\.]", "").ToLower();
+            var clearedPath = Regex.Replace(newStringBuilder.ToString(), @"[^\w\d_/\./s]", "").ToLower();
             if (filePath != clearedPath)
             {
+                var dir = Path.GetDirectoryName(fullPath);
+                string projectDirectory = CurrentOptions.Slug;
+
                 newFullPath = Path.Combine(Path.GetDirectoryName(fullPath), Path.GetFileName(clearedPath));
+                newFullPath = Path.Combine(config.localDirectory, projectDirectory, clearedPath.Replace('/', '\\'));
                 var tmp = newFullPath;
                 var extension = Path.GetExtension(newFullPath);
                 int number = 2;
                 while (File.Exists(newFullPath))
                 {
                     var newFileName = $"{Path.GetFileNameWithoutExtension(tmp)}{number++}{extension}";
-                    newFullPath = Path.Combine(Path.GetDirectoryName(fullPath), newFileName);
+                    newFullPath = Path.Combine(Path.GetDirectoryName(clearedPath), newFileName);
                 }
 
                 tmp = newFullPath;
@@ -581,7 +598,14 @@ namespace microStudioCompanion
                 {
                     Logger.LogLocalError($"File name {filePath} is not allowed in microStudio. Renaming to {Path.GetFileName(tmp)}");
                     await Task.Delay(300);
+                    Directory.CreateDirectory(Path.GetDirectoryName(tmp));
                     System.IO.File.Move(fullPath, tmp);
+
+                    var parentDirectory = new FileInfo(fullPath).Directory.FullName;
+                    if (!Directory.EnumerateFiles(parentDirectory, "*.*", SearchOption.AllDirectories).Any())
+                    {
+                        Directory.Delete(parentDirectory);
+                    }
                 });
                 return true;
             }
@@ -681,7 +705,7 @@ namespace microStudioCompanion
                 project = (int)selectedProject.id,
                 file = remoteFilePath
             }.SendVia(socket);
-        }       
+        }
 
         private static void PushFile(string filePath, dynamic selectedProject, Config config, WebsocketClient socket)
         {
