@@ -8,10 +8,11 @@ namespace microStudioCompanion
 {
     public class Config
     {
-        public static string configFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "config.JSON");
-        public static string defaultProjectsDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        public static string configFilePath = Path.Combine(System.AppContext.BaseDirectory, "config.JSON");
+        public static string defaultProjectsDirectory = Path.Combine(System.AppContext.BaseDirectory, "Projects");
         public string nick { get; set; }
         public string localDirectory { get; set; }
+        public string lastSlug { get; set; }
 
         internal void Save()
         {
@@ -47,12 +48,18 @@ namespace microStudioCompanion
         {
             do
             {
-                Logger.LogLocalQuery($"Local projects parent directory (it must exist) (leave empty to leave default - {defaultProjectsDirectory}): ");
+                Logger.LogLocalQuery($"Local projects parent directory (it must exist) (leave empty to leave default - {defaultProjectsDirectory}) (! to create it): ");
                 this.localDirectory = Console.ReadLine();
+                if (localDirectory == "!")
+                {
+                    Directory.CreateDirectory(defaultProjectsDirectory);
+                    localDirectory = defaultProjectsDirectory;
+                }
                 if (string.IsNullOrWhiteSpace(localDirectory))
                 {
                     localDirectory = defaultProjectsDirectory;
                 }
+               
             } while (!Directory.Exists(this.localDirectory));
         }
 

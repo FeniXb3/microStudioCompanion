@@ -21,10 +21,13 @@ namespace microStudioCompanion
         static WebsocketClient socket;
         static int stepNumber = 0;
         static Dictionary<string, List<Action>> modes;
-        static bool ChangeStep { get; 
-            set; } = false;
+        static bool ChangeStep
+        {
+            get;
+            set;
+        } = false;
         static bool finished = false;
-        static List<string> subDirectories = new List<string> { "ms", "sprites", "maps", "doc" };
+        static List<string> subDirectories = new List<string> { "ms", "sprites", "maps", "doc", "assets", "music", "sounds" };
         static Dictionary<string, bool> subDirHandled = new Dictionary<string, bool>();
         private static Dictionary<string, FileStream> lockStreams = new Dictionary<string, FileStream>();
         private static bool isWatching;
@@ -67,7 +70,7 @@ namespace microStudioCompanion
             Logger.ShowTimestamps = CurrentOptions.Timestamps;
             Logger.ColorMessages = !CurrentOptions.NoColor;
 
-            while(CurrentOptions.Mode == null || !modes.ContainsKey(CurrentOptions.Mode))
+            while (CurrentOptions.Mode == null || !modes.ContainsKey(CurrentOptions.Mode))
             {
                 Logger.LogLocalQuery($"Choose mode [{string.Join("/", modes.Keys)}]: ");
                 CurrentOptions.Mode = Console.ReadLine();
@@ -95,6 +98,19 @@ namespace microStudioCompanion
                             stepNumber++;
                             ChangeStep = false;
                             modes[CurrentOptions.Mode][stepNumber]();
+                        }
+                    }
+
+                    if (Console.KeyAvailable)
+                    {
+                        ConsoleKeyInfo key = Console.ReadKey(true);
+                        switch (key.Key)
+                        {
+                            case ConsoleKey.Q:
+                                finished = true;
+                                break;
+                            default:
+                                break;
                         }
                     }
                 }
@@ -130,7 +146,7 @@ namespace microStudioCompanion
             {
                 () => TokenHandler.GetToken(config, socket),
                 () => new GetProjectListRequest().SendVia(socket),
-                () => SelectProject(),
+                () => SelectProject(config),
                 () => EnsureParentDirectoryExists(),
                 () => PushAllFiles(),
                 () => WaitForRequestsToBeHandled(),
@@ -170,7 +186,7 @@ namespace microStudioCompanion
             {
                 () => TokenHandler.GetToken(config, socket),
                 () => new GetProjectListRequest().SendVia(socket),
-                () => SelectProject(),
+                () => SelectProject(config),
                 () => EnsureParentDirectoryExists(),
                 () => PullFiles(config, socket),
                 () => WaitForRequestsToBeHandled(),
@@ -258,6 +274,9 @@ namespace microStudioCompanion
                         }
                         ChangeStep = true;
                         break;
+                    case ResponseTypes.project_options_updated:
+                        Logger.LogIncomingInfo("Received project options");
+                        break;
                     case ResponseTypes.write_project_file:
                         Logger.LogIncomingInfo($"{RequestBase.GetSentRequest<WriteProjectFileRequest>(requestId).file} Writing of file completed");
                         break;
@@ -292,6 +311,12 @@ namespace microStudioCompanion
                         break;
                     case ResponseTypes.pong:
                         break;
+                    case ResponseTypes.user_stats:
+                        Logger.LogIncomingInfo("Received users stats");
+                        break;
+                    case ResponseTypes.achievements:
+                        Logger.LogIncomingInfo("Received achievements data");
+                        break;
                     default:
                         Logger.LogLocalError($"Unhandled response type: {responseTypeText}");
                         Logger.LogIncomingInfo($"Incomming message: {response}");
@@ -317,6 +342,7 @@ namespace microStudioCompanion
 
         private static void UpdateFile(string filePath, string content)
         {
+            filePath = filePath.Replace('-', '/');
             Logger.LogLocalInfo($"{filePath} Updating local file to remote content");
 
             string projectDirectory = CurrentOptions.Slug;
@@ -384,9 +410,10 @@ namespace microStudioCompanion
         }
         private static void DeleteFile(string filePath)
         {
+            filePath = filePath.Replace('-', '/');
             string projectDirectory = CurrentOptions.Slug;
             var localFilePath = Path.Combine(config.localDirectory, projectDirectory, filePath);
-            if(lockStreams.ContainsKey(filePath))
+            if (lockStreams.ContainsKey(filePath))
             {
                 lockStreams[filePath].Close();
                 lockStreams.Remove(filePath);
@@ -395,6 +422,14 @@ namespace microStudioCompanion
 
             System.IO.File.Delete(localFilePath);
             Logger.LogLocalInfo($"{filePath} Removed local file");
+
+            var parentDirectory = new FileInfo(localFilePath).Directory.FullName;
+            var subCount = filePath.Count(s => s == '/');
+            if (!Directory.EnumerateFiles(parentDirectory, "*.*", SearchOption.AllDirectories).Any() && subCount > 1)
+            {
+                Directory.Delete(parentDirectory);
+                Logger.LogLocalInfo($"Removed empty directory {parentDirectory}");
+            }
         }
 
         private static void HandleError(string error)
@@ -450,8 +485,14 @@ namespace microStudioCompanion
             string localProjectPath = Path.Combine(config.localDirectory, CurrentOptions.Slug);
             fileSystemWatcher = new FileSystemWatcher(localProjectPath)
             {
+                Filters = { "*.ms", "*.png", "*.json", "*.md",
+                            "*.ttf","*.wav","*.mp3" },
+                NotifyFilter = NotifyFilters.LastWrite |
+                               NotifyFilters.FileName |
+                               NotifyFilters.DirectoryName |
+                               NotifyFilters.FileName |
+                               NotifyFilters.Attributes,
                 IncludeSubdirectories = true,
-                Filters = { "*.ms", "*.png", "*.json", "*.md" },
                 EnableRaisingEvents = true
             };
             fileSystemWatcher.Changed += FileSystemWatcher_Changed;
@@ -460,12 +501,14 @@ namespace microStudioCompanion
             fileSystemWatcher.Deleted += FileSystemWatcher_Deleted;
             var message = $"Watching project {(string)selectedProject.title} directory: {localProjectPath}";
             Logger.LogLocalInfo(message, ConsoleColor.Black, ConsoleColor.DarkGreen);
+            Logger.LogLocalInfo("Press q to exit", ConsoleColor.Black, ConsoleColor.DarkGreen);
             isWatching = true;
         }
 
         private static void PushAllFiles()
         {
-            Task.Run(async () => { 
+            Task.Run(async () =>
+            {
                 string localProjectPath = Path.Combine(config.localDirectory, CurrentOptions.Slug);
 
                 foreach (var item in subDirectories)
@@ -475,7 +518,7 @@ namespace microStudioCompanion
 
                     foreach (var fileName in fileNames)
                     {
-                        var filePath = fileName.Replace(localProjectPath+"\\", "").Replace('\\', '/');
+                        var filePath = fileName.Replace(localProjectPath + "\\", "").Replace('\\', '/');
                         if (RenameIfNeeded(filePath, fileName, out string newFullPath))
                         {
                             await Task.Delay(1000);
@@ -498,7 +541,8 @@ namespace microStudioCompanion
                 return;
             }
 
-            if (!subDirectories.Contains(Path.GetDirectoryName(e.Name)))
+            var root = filePath.Split(Path.AltDirectorySeparatorChar).First();
+            if (!subDirectories.Contains(root))
             {
                 return;
             }
@@ -513,6 +557,7 @@ namespace microStudioCompanion
         private static void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
         {
             var filePath = e.Name.Replace('\\', '/');
+
             if (!ShouldPerformFileChange(filePath))
             {
                 return;
@@ -537,21 +582,33 @@ namespace microStudioCompanion
             var clearedPath = Regex.Replace(newStringBuilder.ToString(), @"[^\w\d_/\.]", "").ToLower();
             if (filePath != clearedPath)
             {
+                var dir = Path.GetDirectoryName(fullPath);
+                string projectDirectory = CurrentOptions.Slug;
+
                 newFullPath = Path.Combine(Path.GetDirectoryName(fullPath), Path.GetFileName(clearedPath));
+                newFullPath = Path.Combine(config.localDirectory, projectDirectory, clearedPath.Replace('/', '\\'));
                 var tmp = newFullPath;
                 var extension = Path.GetExtension(newFullPath);
                 int number = 2;
                 while (File.Exists(newFullPath))
                 {
                     var newFileName = $"{Path.GetFileNameWithoutExtension(tmp)}{number++}{extension}";
-                    newFullPath = Path.Combine(Path.GetDirectoryName(fullPath), newFileName);
+                    newFullPath = Path.Combine(Path.GetDirectoryName(clearedPath), newFileName);
                 }
 
                 tmp = newFullPath;
-                Task.Run(async () => {
+                Task.Run(async () =>
+                {
                     Logger.LogLocalError($"File name {filePath} is not allowed in microStudio. Renaming to {Path.GetFileName(tmp)}");
                     await Task.Delay(300);
+                    Directory.CreateDirectory(Path.GetDirectoryName(tmp));
                     System.IO.File.Move(fullPath, tmp);
+
+                    var parentDirectory = new FileInfo(fullPath).Directory.FullName;
+                    if (!Directory.EnumerateFiles(parentDirectory, "*.*", SearchOption.AllDirectories).Any())
+                    {
+                        Directory.Delete(parentDirectory);
+                    }
                 });
                 return true;
             }
@@ -573,8 +630,8 @@ namespace microStudioCompanion
                 changeHistory.Remove(oldFilePath);
             }
 
-            if(RenameIfNeeded(filePath, e.FullPath, out _))
-            { 
+            if (RenameIfNeeded(filePath, e.FullPath, out _))
+            {
                 return;
             }
 
@@ -597,7 +654,7 @@ namespace microStudioCompanion
             if (changeHistory.ContainsKey(filePath))
             {
                 var lastContent = changeHistory[filePath];
-                
+
                 if (content == lastContent || content == null)
                 {
                     result = false;
@@ -609,7 +666,8 @@ namespace microStudioCompanion
                 result = false;
             }
 
-            if (!subDirectories.Contains(Path.GetDirectoryName(filePath)))
+            var root = filePath.Split(Path.AltDirectorySeparatorChar).First();
+            if (!subDirectories.Contains(root))
             {
                 result = false;
             }
@@ -628,32 +686,40 @@ namespace microStudioCompanion
 
             PushFile(filePath, selectedProject, config, socket);
         }
+        private static string localPathToRemotePath(string localPath)
+        {
+            var i = localPath.IndexOf('/');
+            var remotePath = localPath.Substring(0, i) + "/" + localPath.Substring(i + 1).Replace('/', '-');
+            return remotePath;
+        }
 
         private static void DeleteRemoteFile(string filePath, dynamic selectedProject, Config config, WebsocketClient socket)
         {
+            var remoteFilePath = localPathToRemotePath(filePath);
+
             new LockProjectFileRequest
             {
-                file = filePath,
+                file = remoteFilePath,
                 project = (int)selectedProject.id
             }.SendVia(socket);
 
             new DeleteProjectFileRequest
             {
                 project = (int)selectedProject.id,
-                file = filePath
+                file = remoteFilePath
             }.SendVia(socket);
         }
 
         private static void PushFile(string filePath, dynamic selectedProject, Config config, WebsocketClient socket)
         {
-            string title = selectedProject.title;
+            var remoteFilePath = localPathToRemotePath(filePath);
 
             new LockProjectFileRequest
             {
-                file = filePath,
+                file = remoteFilePath,
                 project = (int)selectedProject.id
             }.SendVia(socket);
-            
+
             string content;
             try
             {
@@ -669,11 +735,31 @@ namespace microStudioCompanion
                 Thread.Sleep(300);
                 content = ReadFileContent(filePath, CurrentOptions.Slug, config);
             }
+
+
+            var thumbnail = "";
+            var root = filePath.Split(Path.AltDirectorySeparatorChar).First();
+            switch (root)
+            {
+                case "assets":
+                    thumbnail = Convert.ToBase64String(System.IO.File.ReadAllBytes("thumbnails\\defaultasset.png"));
+                    break;
+                case "sounds":
+                    thumbnail = Convert.ToBase64String(System.IO.File.ReadAllBytes("thumbnails\\defaultsound.png"));
+                    break;
+                case "music":
+                    thumbnail = Convert.ToBase64String(System.IO.File.ReadAllBytes("thumbnails\\defaultmusic.png"));
+                    break;
+                default:
+                    break;
+            }
+
             new WriteProjectFileRequest
             {
                 project = selectedProject.id,
-                file = filePath,
-                content = content
+                file = remoteFilePath,
+                content = content,
+                thumbnail = thumbnail
             }.SendVia(socket);
         }
 
@@ -694,7 +780,12 @@ namespace microStudioCompanion
                     content = Convert.ToBase64String(System.IO.File.ReadAllBytes(localFilePath));
                     break;
                 default:
-                    content = System.IO.File.ReadAllText(localFilePath);
+                    //Read only file even if locked
+                    using (var fileStream = new FileStream(localFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    using (var textReader = new StreamReader(fileStream))
+                    {
+                        content = textReader.ReadToEnd();
+                    }
                     break;
             }
 
@@ -708,7 +799,10 @@ namespace microStudioCompanion
                             { "ms", "ms" },
                             { "sprites", "sprites" },
                             { "maps", "maps" },
-                            { "doc", "doc" }
+                            { "doc", "doc" },
+                            { "assets", "assets" },
+                            { "music", "music" },
+                            { "sounds", "sounds" },
                         };
 
 
@@ -728,19 +822,25 @@ namespace microStudioCompanion
             }
         }
 
-        private static void SelectProject()
+        private static void SelectProject(Config config)
         {
             while (true)
             {
                 if (string.IsNullOrWhiteSpace(CurrentOptions.Slug))
                 {
-                    Logger.LogLocalQuery("Project slug to backup (leave empty to see available projects): ");
+                    Logger.LogLocalQuery($"Project slug to backup (leave empty to see available projects)" +
+                        $" (! to use last Slug: {config.lastSlug}) ");
                     CurrentOptions.Slug = Console.ReadLine();
                 }
-
+                if (CurrentOptions.Slug == "!" && !string.IsNullOrWhiteSpace(config.lastSlug))
+                {
+                    CurrentOptions.Slug = config.lastSlug;
+                }
                 if (projects.ContainsKey(CurrentOptions.Slug))
                 {
                     selectedProject = projects[CurrentOptions.Slug];
+                    config.lastSlug = CurrentOptions.Slug;
+                    config.Save();
                     break;
                 }
                 else

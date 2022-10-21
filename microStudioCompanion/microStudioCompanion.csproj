@@ -18,4 +18,16 @@
     <PackageReference Include="Websocket.Client" Version="4.3.21" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="thumbnails\defaultasset.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="thumbnails\defaultmusic.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="thumbnails\defaultsound.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
