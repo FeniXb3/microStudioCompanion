@@ -579,7 +579,7 @@ namespace microStudioCompanion
                                             .Where(x => x < 128)
                                             .ToArray());
 
-            var clearedPath = Regex.Replace(newStringBuilder.ToString(), @"[^\w\d_/\./s]", "").ToLower();
+            var clearedPath = Regex.Replace(newStringBuilder.ToString(), @"[^\w\d_/\.]", "").ToLower();
             if (filePath != clearedPath)
             {
                 var dir = Path.GetDirectoryName(fullPath);
