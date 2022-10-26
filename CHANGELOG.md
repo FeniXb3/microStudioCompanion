@@ -1,6 +1,14 @@
 # CHANGELOG
 
-### 2.1.0 - Jan 11, 2021
+### 2.3.0 - October 26, 2022
+
+- Updated by HomineLudens to match features added to microStudio since the last release
+
+### 2.2.0 - January 12, 2021
+
+- Added new mode - `push`
+
+### 2.1.0 - January 11, 2021
 
 - Disabled cleaning project subdirectories before watching or pulling by default - made it optionally enabled
 - Added command line argument:
